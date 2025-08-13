@@ -3,6 +3,7 @@ import random
 import json
 import re
 import time
+import hashlib
 from datetime import datetime
 from io import BytesIO
 import requests
@@ -222,24 +223,63 @@ def create_composite_cover_image(away_team, home_team, away_logo_url, home_logo_
             return None
 
 def upload_image_to_webflow(image_buffer, filename):
-    """Upload image to Webflow assets"""
+    """Upload image to Webflow assets using the two-step process"""
+    import hashlib
+    
     try:
-        files = {
-            'file': (filename, image_buffer, 'image/png')
+        # Step 1: Calculate MD5 hash
+        image_buffer.seek(0)
+        file_content = image_buffer.read()
+        file_hash = hashlib.md5(file_content).hexdigest()
+        image_buffer.seek(0)
+        
+        # Step 2: Create asset metadata to get upload URL
+        metadata_payload = {
+            "fileName": filename,
+            "fileHash": file_hash,
+            "originUrl": None
         }
         
         response = requests.post(
             f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/assets',
-            headers={'Authorization': f'Bearer {WEBFLOW_API_TOKEN}'},
-            files=files,
+            headers=WEBFLOW_HEADERS,
+            json=metadata_payload,
             timeout=30
         )
         
-        if response.status_code == 201:
-            asset_data = response.json()
-            return asset_data.get('url') or asset_data.get('publicUrl')
+        if response.status_code != 201:
+            print(f"❌ Failed to create asset metadata: {response.status_code} - {response.text}")
+            return None
+        
+        asset_data = response.json()
+        upload_url = asset_data.get('uploadUrl')
+        upload_details = asset_data.get('uploadDetails', {})
+        
+        if not upload_url:
+            print("❌ No upload URL returned from Webflow")
+            return None
+        
+        # Step 3: Upload file to S3 using the provided URL and details
+        upload_headers = {}
+        files = {'file': (filename, image_buffer, 'image/png')}
+        
+        # Add any required fields from upload_details
+        upload_data = upload_details.copy() if upload_details else {}
+        
+        s3_response = requests.post(
+            upload_url,
+            headers=upload_headers,
+            files=files,
+            data=upload_data,
+            timeout=60
+        )
+        
+        if s3_response.status_code in [200, 201, 204]:
+            print(f"  ✅ Successfully uploaded to S3")
+            # Return the asset URL from the original response
+            return asset_data.get('url') or asset_data.get('publicUrl') or f"https://uploads-ssl.webflow.com/{file_hash}/{filename}"
         else:
-            print(f"❌ Failed to upload image: {response.status_code} - {response.text}")
+            print(f"❌ Failed to upload to S3: {s3_response.status_code}")
             return None
             
     except Exception as e:
