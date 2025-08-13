@@ -599,7 +599,6 @@ def publish_webflow_site():
     except Exception as e:
         print(f"❌ Error publishing Webflow site: {e}")
         return False,
-            json={"domains": [domain_id]},
             timeout=30
         )
         
@@ -609,6 +608,7 @@ def publish_webflow_site():
         else:
             print(f"  ❌ Failed to publish site: {response.status_code}")
             print(f"     Response: {response.text}")
+            print("     Posts are created as drafts - manually publish in Webflow dashboard")
             return False
             
     except Exception as e:
