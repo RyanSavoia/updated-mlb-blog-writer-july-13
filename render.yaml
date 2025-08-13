@@ -11,6 +11,6 @@ services:
       - key: WEBFLOW_API_TOKEN
         sync: false
       - key: WEBFLOW_SITE_ID
-        value: "580e63e98c9a982ac9b8b741"
+        value: "670bfa1fd9c3c20a149fa6a7"
       - key: WEBFLOW_COLLECTION_ID
-        value: "67afe23466e94ab5d181cdd99"
+        value: "67afe2346e94ab5d181cdd99"
