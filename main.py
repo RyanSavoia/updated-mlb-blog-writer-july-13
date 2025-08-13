@@ -392,26 +392,21 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
 def publish_webflow_site():
     """Publish the Webflow site to make posts live"""
     try:
-        # Try publishing to all domains (Webflow should auto-detect)
-        print("  🌐 Publishing to all domains...")
-        response = requests.post(
-            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
+        # Step 1: Get domain IDs from the site
+        print("  🔍 Getting domain IDs...")
+        domains_response = requests.get(
+            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/domains',
             headers=WEBFLOW_HEADERS,
             timeout=30
         )
         
-        if response.status_code == 202:
-            print("  ✅ Site published successfully")
-            return True
-        else:
-            print(f"  ❌ Failed to publish site: {response.status_code}")
-            print(f"     Response: {response.text}")
-            print("     Posts are created as drafts - manually publish in Webflow dashboard")
-            return False
+        if domains_response.status_code == 200:
+            domains_data = domains_response.json()
+            domain_ids = []
             
-    except Exception as e:
-        print(f"❌ Error publishing Webflow site: {e}")
-        return False
+            # Extract domain IDs from response
+            if isinstance(domains_data, dict) and 'domains' in domains_data:
+                domains
 
 def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
     """Create a composite cover image with both team logos"""
