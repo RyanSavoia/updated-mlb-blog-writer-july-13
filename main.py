@@ -714,39 +714,63 @@ def generate_and_publish_daily_blogs():
             blog_post_with_links = auto_link_blog_content(blog_post)
             print("  ✅ Internal links added")
             
-            # Create composite cover image
+            # Create composite cover image with fallback
             print("  🖼️ Creating composite cover image...")
             away_team = game_data['away_team']
             home_team = game_data['home_team']
             away_logo_url = get_team_logo_url(away_team)
             home_logo_url = get_team_logo_url(home_team)
             
-            cover_image_buffer = create_composite_cover_image(
-                away_team, home_team, away_logo_url, home_logo_url
-            )
+            cover_image_url = None
             
-            if cover_image_buffer:
-                # Upload cover image to Webflow
-                print("  ☁️ Uploading cover image to Webflow...")
-                cover_filename = f"{away_team.lower()}-vs-{home_team.lower()}-{datetime.now().strftime('%Y%m%d')}.png"
-                cover_image_url = upload_image_to_webflow(cover_image_buffer, cover_filename)
+            try:
+                # Try to create and upload composite image first
+                cover_image_buffer = create_composite_cover_image(
+                    away_team, home_team, away_logo_url, home_logo_url
+                )
                 
-                if cover_image_url:
-                    print(f"  ✅ Cover image uploaded: {cover_image_url}")
+                if cover_image_buffer:
+                    print("  ☁️ Uploading composite image to Webflow...")
+                    cover_filename = f"{away_team.lower()}-vs-{home_team.lower()}-{datetime.now().strftime('%Y%m%d')}.png"
                     
-                    # Create Webflow CMS post
-                    print("  📤 Creating Webflow CMS post...")
-                    webflow_post = create_webflow_post(game_data, blog_post_with_links, cover_image_url)
+                    start_time = time.time()
+                    cover_image_url = upload_image_to_webflow(cover_image_buffer, cover_filename)
+                    upload_time = time.time() - start_time
                     
-                    if webflow_post:
-                        successful_posts += 1
-                        print(f"  ✅ Successfully published to Webflow")
+                    if cover_image_url:
+                        print(f"  ✅ Composite image uploaded in {upload_time:.1f}s")
                     else:
-                        print(f"  ❌ Failed to create Webflow post")
-                else:
-                    print(f"  ❌ Failed to upload cover image")
+                        print(f"  ⚠️ Composite upload failed after {upload_time:.1f}s")
+                
+                # Fallback: Use direct ESPN logo URL if composite failed
+                if not cover_image_url:
+                    print("  🔄 Fallback: Using home team logo directly...")
+                    cover_image_url = home_logo_url  # Use home team logo as fallback
+                    print(f"  ✅ Using fallback image: {cover_image_url}")
+                    
+            except Exception as e:
+                print(f"  ⚠️ Image processing error: {e}")
+                # Fallback to direct logo URL
+                cover_image_url = home_logo_url
+                print(f"  ✅ Using fallback image: {cover_image_url}")
+            
+            # Webflow requires a cover image, so we must have one
+            if not cover_image_url:
+                print("  ❌ No cover image available - skipping this post")
+                continue
+            
+            # Create Webflow CMS post (cover image is required)
+            print("  📤 Creating Webflow CMS post...")
+            webflow_post = create_webflow_post(game_data, blog_post_with_links, cover_image_url)
+            
+            if webflow_post:
+                successful_posts += 1
+                print(f"  ✅ Successfully published to Webflow")
             else:
-                print(f"  ❌ Failed to create cover image")
+                print(f"  ❌ Failed to create Webflow post")
+            
+            # Small delay between posts to avoid rate limits
+            time.sleep(1)
             
             # Small delay between posts to avoid rate limits
             time.sleep(2)
@@ -767,6 +791,15 @@ def generate_and_publish_daily_blogs():
 
 if __name__ == '__main__':
     print("🏟️ MLB Blog Generator - Webflow Edition")
+    
+    # Test Webflow connection first
+    print("🔗 Testing Webflow API connection...")
+    if not test_webflow_connection():
+        print("❌ Webflow connection failed. Check your Site ID and API token.")
+        print(f"   Site ID: {WEBFLOW_SITE_ID}")
+        print(f"   Token starts with: {WEBFLOW_API_TOKEN[:20]}...")
+        exit(1)
+    
     print("🔄 Generating and publishing blogs...")
     generate_and_publish_daily_blogs()
     print("✅ Blog generation complete!")
