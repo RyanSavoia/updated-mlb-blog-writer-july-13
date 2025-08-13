@@ -225,7 +225,7 @@ def create_simple_team_cover_image(team_name, logo_url):
 def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
     """Generate a pie chart showing pitcher's pitch mix"""
     try:
-        if not arsenal or not isinstance(arsenal, dict):
+        if not arsenal:
             print(f"⚠️ No arsenal data for {pitcher_name}")
             return False
         
@@ -234,21 +234,32 @@ def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
         labels = []
         
         # Arsenal format: "Four-Seam Fastball (35% usage, 97.1 mph); Slider (18% usage, 87.0 mph)"
-        pitches = arsenal.split(';')
+        if isinstance(arsenal, str):
+            # Split by semicolon and parse each pitch
+            pitches = [p.strip() for p in arsenal.split(';') if p.strip()]
+        else:
+            print(f"⚠️ Arsenal data for {pitcher_name} is not in expected string format")
+            return False
         
         for pitch in pitches:
-            pitch = pitch.strip()
-            if '(' in pitch and '%' in pitch:
-                # Extract pitch name and usage percentage
-                pitch_name = pitch.split('(')[0].strip()
-                usage_part = pitch.split('(')[1].split(',')[0]  # Get "35% usage" part
-                usage_pct = float(re.findall(r'(\d+(?:\.\d+)?)', usage_part)[0])
-                
-                pitch_data.append(usage_pct)
-                labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
+            if '(' in pitch and '%' in pitch and 'usage' in pitch:
+                try:
+                    # Extract pitch name and usage percentage
+                    pitch_name = pitch.split('(')[0].strip()
+                    
+                    # Find the usage percentage
+                    usage_match = re.search(r'(\d+(?:\.\d+)?)\s*%\s*usage', pitch)
+                    if usage_match:
+                        usage_pct = float(usage_match.group(1))
+                        
+                        pitch_data.append(usage_pct)
+                        labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
+                except Exception as e:
+                    print(f"⚠️ Error parsing pitch: {pitch} - {e}")
+                    continue
         
         if not pitch_data:
-            print(f"⚠️ Could not parse arsenal data for {pitcher_name}")
+            print(f"⚠️ Could not parse arsenal data for {pitcher_name}: {arsenal}")
             return False
         
         # Create pie chart
@@ -282,7 +293,7 @@ def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()
         
-        print(f"  ✅ Pitch mix chart saved: {save_path}")
+        print(f"  ✅ Pitch mix chart saved: {save_path} ({len(pitch_data)} pitches)")
         return True
         
     except Exception as e:
