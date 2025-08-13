@@ -229,37 +229,57 @@ def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
             print(f"⚠️ No arsenal data for {pitcher_name}")
             return False
         
-        # Parse arsenal string into pitch types and usage
+        # Parse arsenal data into pitch types and usage
         pitch_data = []
         labels = []
         
-        # Arsenal format: "Four-Seam Fastball (35% usage, 97.1 mph); Slider (18% usage, 87.0 mph)"
-        if isinstance(arsenal, str):
-            # Split by semicolon and parse each pitch
-            pitches = [p.strip() for p in arsenal.split(';') if p.strip()]
-        else:
-            print(f"⚠️ Arsenal data for {pitcher_name} is not in expected string format")
-            return False
-        
-        for pitch in pitches:
-            if '(' in pitch and '%' in pitch and 'usage' in pitch:
+        # Arsenal is now a dictionary with pitch objects
+        if isinstance(arsenal, dict):
+            for pitch_type, pitch_info in arsenal.items():
                 try:
-                    # Extract pitch name and usage percentage
-                    pitch_name = pitch.split('(')[0].strip()
+                    # Extract usage rate and convert to percentage
+                    usage_rate = pitch_info.get('usage_rate', 0)
+                    usage_pct = usage_rate * 100  # Convert from decimal to percentage
                     
-                    # Find the usage percentage
-                    usage_match = re.search(r'(\d+(?:\.\d+)?)\s*%\s*usage', pitch)
-                    if usage_match:
-                        usage_pct = float(usage_match.group(1))
-                        
+                    # Get pitch name and average speed
+                    pitch_name = pitch_info.get('name', pitch_type)
+                    avg_speed = pitch_info.get('avg_speed', 0)
+                    
+                    if usage_pct > 0:  # Only include pitches that are actually used
                         pitch_data.append(usage_pct)
-                        labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
+                        labels.append(f"{pitch_name} ({usage_pct:.1f}%)")
+                        
                 except Exception as e:
-                    print(f"⚠️ Error parsing pitch: {pitch} - {e}")
+                    print(f"⚠️ Error parsing pitch {pitch_type}: {e}")
                     continue
+        else:
+            # Fallback for string format (your original code)
+            if isinstance(arsenal, str):
+                # Split by semicolon and parse each pitch
+                pitches = [p.strip() for p in arsenal.split(';') if p.strip()]
+            else:
+                print(f"⚠️ Arsenal data for {pitcher_name} is not in expected format")
+                return False
+            
+            for pitch in pitches:
+                if '(' in pitch and '%' in pitch and 'usage' in pitch:
+                    try:
+                        # Extract pitch name and usage percentage
+                        pitch_name = pitch.split('(')[0].strip()
+                        
+                        # Find the usage percentage
+                        usage_match = re.search(r'(\d+(?:\.\d+)?)\s*%\s*usage', pitch)
+                        if usage_match:
+                            usage_pct = float(usage_match.group(1))
+                            
+                            pitch_data.append(usage_pct)
+                            labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
+                    except Exception as e:
+                        print(f"⚠️ Error parsing pitch: {pitch} - {e}")
+                        continue
         
         if not pitch_data:
-            print(f"⚠️ Could not parse arsenal data for {pitcher_name}: {arsenal}")
+            print(f"⚠️ Could not parse arsenal data for {pitcher_name}")
             return False
         
         # Create pie chart
@@ -299,6 +319,8 @@ def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
     except Exception as e:
         print(f"❌ Error creating pitch mix chart for {pitcher_name}: {e}")
         return False
+
+def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
     """Create a composite cover image with both team logos"""
     try:
         # Download team logos
@@ -983,9 +1005,6 @@ def generate_and_publish_daily_blogs():
             
             # Small delay between posts to avoid rate limits
             time.sleep(1)
-            
-            # Small delay between posts to avoid rate limits
-            time.sleep(2)
             
         except Exception as e:
             print(f"  ❌ Error processing {topic}: {e}")
