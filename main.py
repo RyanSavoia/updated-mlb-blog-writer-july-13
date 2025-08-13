@@ -139,7 +139,7 @@ def get_team_logo_url(team_name):
 def test_webflow_connection():
     """Test Webflow API connection and site access"""
     try:
-        # Test site access
+        # Step 1: Calculate MD5 hash
         print(f"  Testing Site ID: {WEBFLOW_SITE_ID}")
         response = requests.get(
             f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}',
@@ -221,193 +221,6 @@ def create_simple_team_cover_image(team_name, logo_url):
     except Exception as e:
         print(f"❌ Error creating team cover image: {e}")
         return None
-
-def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
-    """Generate a pie chart showing pitcher's pitch mix"""
-    try:
-        if not arsenal:
-            print(f"⚠️ No arsenal data for {pitcher_name}")
-            return False
-        
-        # Parse arsenal data into pitch types and usage
-        pitch_data = []
-        labels = []
-        
-        # Arsenal is now a dictionary with pitch objects
-        if isinstance(arsenal, dict):
-            for pitch_type, pitch_info in arsenal.items():
-                try:
-                    # Extract usage rate and convert to percentage
-                    usage_rate = pitch_info.get('usage_rate', 0)
-                    usage_pct = usage_rate * 100  # Convert from decimal to percentage
-                    
-                    # Get pitch name and average speed
-                    pitch_name = pitch_info.get('name', pitch_type)
-                    avg_speed = pitch_info.get('avg_speed', 0)
-                    
-                    if usage_pct > 0:  # Only include pitches that are actually used
-                        pitch_data.append(usage_pct)
-                        labels.append(f"{pitch_name} ({usage_pct:.1f}%)")
-                        
-                except Exception as e:
-                    print(f"⚠️ Error parsing pitch {pitch_type}: {e}")
-                    continue
-        else:
-            # Fallback for string format (your original code)
-            if isinstance(arsenal, str):
-                # Split by semicolon and parse each pitch
-                pitches = [p.strip() for p in arsenal.split(';') if p.strip()]
-            else:
-                print(f"⚠️ Arsenal data for {pitcher_name} is not in expected format")
-                return False
-            
-            for pitch in pitches:
-                if '(' in pitch and '%' in pitch and 'usage' in pitch:
-                    try:
-                        # Extract pitch name and usage percentage
-                        pitch_name = pitch.split('(')[0].strip()
-                        
-                        # Find the usage percentage
-                        usage_match = re.search(r'(\d+(?:\.\d+)?)\s*%\s*usage', pitch)
-                        if usage_match:
-                            usage_pct = float(usage_match.group(1))
-                            
-                            pitch_data.append(usage_pct)
-                            labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
-                    except Exception as e:
-                        print(f"⚠️ Error parsing pitch: {pitch} - {e}")
-                        continue
-        
-        if not pitch_data:
-            print(f"⚠️ Could not parse arsenal data for {pitcher_name}")
-            return False
-        
-        # Create pie chart
-        fig, ax = plt.subplots(figsize=(10, 8))
-        
-        # Color scheme
-        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', 
-                 '#FF9F43', '#EE5A24', '#0ABDE3', '#10AC84', '#F79F1F']
-        
-        wedges, texts, autotexts = ax.pie(
-            pitch_data,
-            labels=labels,
-            autopct='%1.1f%%',
-            startangle=90,
-            colors=colors[:len(pitch_data)]
-        )
-        
-        # Style the chart
-        ax.set_title(f'{pitcher_name} - Pitch Mix', fontsize=16, fontweight='bold', pad=20)
-        
-        # Make percentage text more readable
-        for autotext in autotexts:
-            autotext.set_color('white')
-            autotext.set_fontweight('bold')
-        
-        # Make labels more readable
-        for text in texts:
-            text.set_fontsize(10)
-        
-        plt.tight_layout()
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"  ✅ Pitch mix chart saved: {save_path} ({len(pitch_data)} pitches)")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error creating pitch mix chart for {pitcher_name}: {e}")
-        return False
-
-def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
-    """Create a composite cover image with both team logos"""
-    try:
-        # Download team logos
-        away_response = requests.get(away_logo_url, timeout=10)
-        home_response = requests.get(home_logo_url, timeout=10)
-        
-        away_img = Image.open(BytesIO(away_response.content)).convert('RGBA')
-        home_img = Image.open(BytesIO(home_response.content)).convert('RGBA')
-        
-        # Create canvas (1200x630 for social media)
-        canvas = Image.new('RGB', (1200, 630), color='#1a1a1a')
-        draw = ImageDraw.Draw(canvas)
-        
-        # Resize logos to fit nicely
-        logo_size = (200, 200)
-        away_img = away_img.resize(logo_size, Image.Resampling.LANCZOS)
-        home_img = home_img.resize(logo_size, Image.Resampling.LANCZOS)
-        
-        # Position logos with "VS" between them
-        away_x = 250
-        home_x = 750
-        logo_y = 215
-        
-        # Paste logos (handle transparency)
-        canvas.paste(away_img, (away_x, logo_y), away_img if away_img.mode == 'RGBA' else None)
-        canvas.paste(home_img, (home_x, logo_y), home_img if home_img.mode == 'RGBA' else None)
-        
-        # Add "VS" text
-        try:
-            # Try to load a font (fallback to default if not available)
-            font = ImageFont.truetype("arial.ttf", 48)
-        except:
-            font = ImageFont.load_default()
-        
-        vs_text = "VS"
-        bbox = draw.textbbox((0, 0), vs_text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_x = (1200 - text_width) // 2
-        text_y = 300
-        
-        draw.text((text_x, text_y), vs_text, fill='white', font=font)
-        
-        # Add team names
-        try:
-            team_font = ImageFont.truetype("arial.ttf", 24)
-        except:
-            team_font = ImageFont.load_default()
-        
-        # Away team name
-        away_bbox = draw.textbbox((0, 0), away_team, font=team_font)
-        away_text_width = away_bbox[2] - away_bbox[0]
-        away_text_x = away_x + (200 - away_text_width) // 2
-        draw.text((away_text_x, logo_y + 220), away_team, fill='white', font=team_font)
-        
-        # Home team name
-        home_bbox = draw.textbbox((0, 0), home_team, font=team_font)
-        home_text_width = home_bbox[2] - home_bbox[0]
-        home_text_x = home_x + (200 - home_text_width) // 2
-        draw.text((home_text_x, logo_y + 220), home_team, fill='white', font=team_font)
-        
-        # Add title
-        title = f"{away_team} vs {home_team} - MLB Preview"
-        try:
-            title_font = ImageFont.truetype("arial.ttf", 32)
-        except:
-            title_font = ImageFont.load_default()
-        
-        title_bbox = draw.textbbox((0, 0), title, font=title_font)
-        title_width = title_bbox[2] - title_bbox[0]
-        title_x = (1200 - title_width) // 2
-        draw.text((title_x, 100), title, fill='white', font=title_font)
-        
-        # Save to BytesIO for upload
-        img_buffer = BytesIO()
-        canvas.save(img_buffer, format='PNG', quality=95)
-        img_buffer.seek(0)
-        
-        return img_buffer
-        
-    except Exception as e:
-        print(f"❌ Error creating composite image: {e}")
-        # Fallback: just download one logo
-        try:
-            response = requests.get(away_logo_url, timeout=10)
-            return BytesIO(response.content)
-        except:
-            return None
 
 def upload_image_to_webflow(image_buffer, filename):
     """Upload image to Webflow assets using the two-step process"""
@@ -598,21 +411,193 @@ def publish_webflow_site():
             
     except Exception as e:
         print(f"❌ Error publishing Webflow site: {e}")
-        return False,
-            timeout=30
+        return False
+
+def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
+    """Create a composite cover image with both team logos"""
+    try:
+        # Download team logos
+        away_response = requests.get(away_logo_url, timeout=10)
+        home_response = requests.get(home_logo_url, timeout=10)
+        
+        away_img = Image.open(BytesIO(away_response.content)).convert('RGBA')
+        home_img = Image.open(BytesIO(home_response.content)).convert('RGBA')
+        
+        # Create canvas (1200x630 for social media)
+        canvas = Image.new('RGB', (1200, 630), color='#1a1a1a')
+        draw = ImageDraw.Draw(canvas)
+        
+        # Resize logos to fit nicely
+        logo_size = (200, 200)
+        away_img = away_img.resize(logo_size, Image.Resampling.LANCZOS)
+        home_img = home_img.resize(logo_size, Image.Resampling.LANCZOS)
+        
+        # Position logos with "VS" between them
+        away_x = 250
+        home_x = 750
+        logo_y = 215
+        
+        # Paste logos (handle transparency)
+        canvas.paste(away_img, (away_x, logo_y), away_img if away_img.mode == 'RGBA' else None)
+        canvas.paste(home_img, (home_x, logo_y), home_img if home_img.mode == 'RGBA' else None)
+        
+        # Add "VS" text
+        try:
+            # Try to load a font (fallback to default if not available)
+            font = ImageFont.truetype("arial.ttf", 48)
+        except:
+            font = ImageFont.load_default()
+        
+        vs_text = "VS"
+        bbox = draw.textbbox((0, 0), vs_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_x = (1200 - text_width) // 2
+        text_y = 300
+        
+        draw.text((text_x, text_y), vs_text, fill='white', font=font)
+        
+        # Add team names
+        try:
+            team_font = ImageFont.truetype("arial.ttf", 24)
+        except:
+            team_font = ImageFont.load_default()
+        
+        # Away team name
+        away_bbox = draw.textbbox((0, 0), away_team, font=team_font)
+        away_text_width = away_bbox[2] - away_bbox[0]
+        away_text_x = away_x + (200 - away_text_width) // 2
+        draw.text((away_text_x, logo_y + 220), away_team, fill='white', font=team_font)
+        
+        # Home team name
+        home_bbox = draw.textbbox((0, 0), home_team, font=team_font)
+        home_text_width = home_bbox[2] - home_bbox[0]
+        home_text_x = home_x + (200 - home_text_width) // 2
+        draw.text((home_text_x, logo_y + 220), home_team, fill='white', font=team_font)
+        
+        # Add title
+        title = f"{away_team} vs {home_team} - MLB Preview"
+        try:
+            title_font = ImageFont.truetype("arial.ttf", 32)
+        except:
+            title_font = ImageFont.load_default()
+        
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_width = title_bbox[2] - title_bbox[0]
+        title_x = (1200 - title_width) // 2
+        draw.text((title_x, 100), title, fill='white', font=title_font)
+        
+        # Save to BytesIO for upload
+        img_buffer = BytesIO()
+        canvas.save(img_buffer, format='PNG', quality=95)
+        img_buffer.seek(0)
+        
+        return img_buffer
+        
+    except Exception as e:
+        print(f"❌ Error creating composite image: {e}")
+        # Fallback: just download one logo
+        try:
+            response = requests.get(away_logo_url, timeout=10)
+            return BytesIO(response.content)
+        except:
+            return None
+
+def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
+    """Generate a pie chart showing pitcher's pitch mix"""
+    try:
+        if not arsenal:
+            print(f"⚠️ No arsenal data for {pitcher_name}")
+            return False
+        
+        # Parse arsenal data into pitch types and usage
+        pitch_data = []
+        labels = []
+        
+        # Arsenal is now a dictionary with pitch objects
+        if isinstance(arsenal, dict):
+            for pitch_type, pitch_info in arsenal.items():
+                try:
+                    # Extract usage rate and convert to percentage
+                    usage_rate = pitch_info.get('usage_rate', 0)
+                    usage_pct = usage_rate * 100  # Convert from decimal to percentage
+                    
+                    # Get pitch name and average speed
+                    pitch_name = pitch_info.get('name', pitch_type)
+                    avg_speed = pitch_info.get('avg_speed', 0)
+                    
+                    if usage_pct > 0:  # Only include pitches that are actually used
+                        pitch_data.append(usage_pct)
+                        labels.append(f"{pitch_name} ({usage_pct:.1f}%)")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error parsing pitch {pitch_type}: {e}")
+                    continue
+        else:
+            # Fallback for string format (your original code)
+            if isinstance(arsenal, str):
+                # Split by semicolon and parse each pitch
+                pitches = [p.strip() for p in arsenal.split(';') if p.strip()]
+            else:
+                print(f"⚠️ Arsenal data for {pitcher_name} is not in expected format")
+                return False
+            
+            for pitch in pitches:
+                if '(' in pitch and '%' in pitch and 'usage' in pitch:
+                    try:
+                        # Extract pitch name and usage percentage
+                        pitch_name = pitch.split('(')[0].strip()
+                        
+                        # Find the usage percentage
+                        usage_match = re.search(r'(\d+(?:\.\d+)?)\s*%\s*usage', pitch)
+                        if usage_match:
+                            usage_pct = float(usage_match.group(1))
+                            
+                            pitch_data.append(usage_pct)
+                            labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
+                    except Exception as e:
+                        print(f"⚠️ Error parsing pitch: {pitch} - {e}")
+                        continue
+        
+        if not pitch_data:
+            print(f"⚠️ Could not parse arsenal data for {pitcher_name}")
+            return False
+        
+        # Create pie chart
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Color scheme
+        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', 
+                 '#FF9F43', '#EE5A24', '#0ABDE3', '#10AC84', '#F79F1F']
+        
+        wedges, texts, autotexts = ax.pie(
+            pitch_data,
+            labels=labels,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=colors[:len(pitch_data)]
         )
         
-        if response.status_code == 202:
-            print("  ✅ Site published successfully")
-            return True
-        else:
-            print(f"  ❌ Failed to publish site: {response.status_code}")
-            print(f"     Response: {response.text}")
-            print("     Posts are created as drafts - manually publish in Webflow dashboard")
-            return False
-            
+        # Style the chart
+        ax.set_title(f'{pitcher_name} - Pitch Mix', fontsize=16, fontweight='bold', pad=20)
+        
+        # Make percentage text more readable
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_fontweight('bold')
+        
+        # Make labels more readable
+        for text in texts:
+            text.set_fontsize(10)
+        
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"  ✅ Pitch mix chart saved: {save_path} ({len(pitch_data)} pitches)")
+        return True
+        
     except Exception as e:
-        print(f"❌ Error publishing Webflow site: {e}")
+        print(f"❌ Error creating pitch mix chart for {pitcher_name}: {e}")
         return False
 
 # ==================== INTERLINKING LOGIC ====================
