@@ -579,32 +579,26 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
 def publish_webflow_site():
     """Publish the Webflow site to make posts live"""
     try:
-        # First, get the domain ID
-        domains_response = requests.get(
-            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/domains',
+        # Try publishing to all domains (Webflow should auto-detect)
+        print("  🌐 Publishing to all domains...")
+        response = requests.post(
+            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
             headers=WEBFLOW_HEADERS,
             timeout=30
         )
         
-        if domains_response.status_code != 200:
-            print(f"  ❌ Failed to get domains: {domains_response.status_code}")
+        if response.status_code == 202:
+            print("  ✅ Site published successfully")
+            return True
+        else:
+            print(f"  ❌ Failed to publish site: {response.status_code}")
+            print(f"     Response: {response.text}")
+            print("     Posts are created as drafts - manually publish in Webflow dashboard")
             return False
-        
-        domains_data = domains_response.json()
-        domains = domains_data.get('domains', [])
-        
-        if not domains:
-            print("  ❌ No domains found for this site")
-            return False
-        
-        # Get the domain ID (usually the first one)
-        domain_id = domains[0]['id']
-        print(f"  🌐 Found domain ID: {domain_id}")
-        
-        # Now publish using the domain ID
-        response = requests.post(
-            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
-            headers=WEBFLOW_HEADERS,
+            
+    except Exception as e:
+        print(f"❌ Error publishing Webflow site: {e}")
+        return False,
             json={"domains": [domain_id]},
             timeout=30
         )
