@@ -133,6 +133,28 @@ def get_team_logo_url(team_name):
     return "https://a.espncdn.com/i/teamlogos/mlb/500/mlb.png"
 
 # ==================== WEBFLOW INTEGRATION ====================
+def test_webflow_connection():
+    """Test Webflow API connection and site access"""
+    try:
+        # Test site access
+        response = requests.get(
+            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}',
+            headers=WEBFLOW_HEADERS,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            site_data = response.json()
+            print(f"✅ Site access verified: {site_data.get('displayName', 'Unknown')}")
+            return True
+        else:
+            print(f"❌ Site access failed: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error testing Webflow connection: {e}")
+        return False
+
 def create_composite_cover_image(away_team, home_team, away_logo_url, home_logo_url):
     """Create a composite cover image with both team logos"""
     try:
