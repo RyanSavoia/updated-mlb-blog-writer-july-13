@@ -10,6 +10,9 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from openai import OpenAI
 from mlb_data_fetcher import MLBDataFetcher
+import matplotlib
+matplotlib.use('Agg')  # Set backend for headless servers
+import matplotlib.pyplot as plt
 
 # Configuration from environment variables
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
@@ -137,6 +140,7 @@ def test_webflow_connection():
     """Test Webflow API connection and site access"""
     try:
         # Test site access
+        print(f"  Testing Site ID: {WEBFLOW_SITE_ID}")
         response = requests.get(
             f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}',
             headers=WEBFLOW_HEADERS,
@@ -146,7 +150,24 @@ def test_webflow_connection():
         if response.status_code == 200:
             site_data = response.json()
             print(f"✅ Site access verified: {site_data.get('displayName', 'Unknown')}")
-            return True
+            
+            # Test collection access
+            print(f"  Testing Collection ID: {WEBFLOW_COLLECTION_ID}")
+            collection_response = requests.get(
+                f'https://api.webflow.com/v2/collections/{WEBFLOW_COLLECTION_ID}',
+                headers=WEBFLOW_HEADERS,
+                timeout=30
+            )
+            
+            if collection_response.status_code == 200:
+                collection_data = collection_response.json()
+                print(f"✅ Collection access verified: {collection_data.get('displayName', 'Unknown')}")
+                return True
+            else:
+                print(f"❌ Collection access failed: {collection_response.status_code}")
+                print(f"   Response: {collection_response.text}")
+                print(f"   Your Collection ID '{WEBFLOW_COLLECTION_ID}' may be incorrect")
+                return False
         else:
             print(f"❌ Site access failed: {response.status_code} - {response.text}")
             return False
@@ -155,7 +176,118 @@ def test_webflow_connection():
         print(f"❌ Error testing Webflow connection: {e}")
         return False
 
-def create_composite_cover_image(away_team, home_team, away_logo_url, home_logo_url):
+def create_simple_team_cover_image(team_name, logo_url):
+    """Create a simple 1200x800 cover image with team logo"""
+    try:
+        # Download team logo
+        response = requests.get(logo_url, timeout=10)
+        logo_img = Image.open(BytesIO(response.content)).convert('RGBA')
+        
+        # Create canvas (1200x800 for proper aspect ratio)
+        canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
+        draw = ImageDraw.Draw(canvas)
+        
+        # Resize logo to fit nicely (400x400 max)
+        logo_size = (400, 400)
+        logo_img = logo_img.resize(logo_size, Image.Resampling.LANCZOS)
+        
+        # Center the logo
+        logo_x = (1200 - logo_size[0]) // 2
+        logo_y = (800 - logo_size[1]) // 2 - 50  # Slightly higher
+        
+        # Paste logo (handle transparency)
+        canvas.paste(logo_img, (logo_x, logo_y), logo_img if logo_img.mode == 'RGBA' else None)
+        
+        # Add team name below logo
+        try:
+            font = ImageFont.truetype("arial.ttf", 48)
+        except:
+            font = ImageFont.load_default()
+        
+        # Team name
+        bbox = draw.textbbox((0, 0), team_name, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_x = (1200 - text_width) // 2
+        text_y = logo_y + logo_size[1] + 30
+        draw.text((text_x, text_y), team_name, fill='white', font=font)
+        
+        # Save to BytesIO for upload
+        img_buffer = BytesIO()
+        canvas.save(img_buffer, format='PNG', quality=95)
+        img_buffer.seek(0)
+        
+        return img_buffer
+        
+    except Exception as e:
+        print(f"❌ Error creating team cover image: {e}")
+        return None
+
+def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
+    """Generate a pie chart showing pitcher's pitch mix"""
+    try:
+        if not arsenal or not isinstance(arsenal, dict):
+            print(f"⚠️ No arsenal data for {pitcher_name}")
+            return False
+        
+        # Parse arsenal string into pitch types and usage
+        pitch_data = []
+        labels = []
+        
+        # Arsenal format: "Four-Seam Fastball (35% usage, 97.1 mph); Slider (18% usage, 87.0 mph)"
+        pitches = arsenal.split(';')
+        
+        for pitch in pitches:
+            pitch = pitch.strip()
+            if '(' in pitch and '%' in pitch:
+                # Extract pitch name and usage percentage
+                pitch_name = pitch.split('(')[0].strip()
+                usage_part = pitch.split('(')[1].split(',')[0]  # Get "35% usage" part
+                usage_pct = float(re.findall(r'(\d+(?:\.\d+)?)', usage_part)[0])
+                
+                pitch_data.append(usage_pct)
+                labels.append(f"{pitch_name} ({usage_pct:.0f}%)")
+        
+        if not pitch_data:
+            print(f"⚠️ Could not parse arsenal data for {pitcher_name}")
+            return False
+        
+        # Create pie chart
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Color scheme
+        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', 
+                 '#FF9F43', '#EE5A24', '#0ABDE3', '#10AC84', '#F79F1F']
+        
+        wedges, texts, autotexts = ax.pie(
+            pitch_data,
+            labels=labels,
+            autopct='%1.1f%%',
+            startangle=90,
+            colors=colors[:len(pitch_data)]
+        )
+        
+        # Style the chart
+        ax.set_title(f'{pitcher_name} - Pitch Mix', fontsize=16, fontweight='bold', pad=20)
+        
+        # Make percentage text more readable
+        for autotext in autotexts:
+            autotext.set_color('white')
+            autotext.set_fontweight('bold')
+        
+        # Make labels more readable
+        for text in texts:
+            text.set_fontsize(10)
+        
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"  ✅ Pitch mix chart saved: {save_path}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error creating pitch mix chart for {pitcher_name}: {e}")
+        return False
     """Create a composite cover image with both team logos"""
     try:
         # Download team logos
@@ -269,11 +401,19 @@ def upload_image_to_webflow(image_buffer, filename):
             timeout=30
         )
         
-        if response.status_code != 201:
+        if response.status_code not in [201, 202]:  # Accept both 201 and 202
             print(f"❌ Failed to create asset metadata: {response.status_code} - {response.text}")
             return None
         
         asset_data = response.json()
+        
+        # Extract the hosted URL directly from response
+        hosted_url = asset_data.get('hostedUrl') or asset_data.get('assetUrl')
+        if hosted_url:
+            print(f"  ✅ Asset created successfully: {hosted_url}")
+            return hosted_url
+        
+        # Fallback to upload process if no direct URL
         upload_url = asset_data.get('uploadUrl')
         upload_details = asset_data.get('uploadDetails', {})
         
@@ -558,6 +698,10 @@ def get_mlb_blog_post_prompt(topic, keywords, game_data):
     else:
         seo_title = topic.replace('MLB Betting Preview', 'Odds, Props & Analysis')
     
+    # Get current date for roundup link
+    current_date = datetime.now().strftime('%Y-%m-%d')
+    current_date_readable = datetime.now().strftime('%b %d')
+    
     prompt = f"""You're an expert MLB betting analyst and blog writer. You write sharp, stat-driven previews for baseball bettors.
 
 Based on the JSON game data below, write a 500–800 word blog post that follows this EXACT structure:
@@ -654,6 +798,12 @@ A: [Answer based on umpire data - "Slightly pitcher-friendly with +X% strikeouts
 **Q: What time is the [Away Team] vs [Home Team] game?**
 A: [Game time from game_time field]
 
+---
+
+**Want more of our best props and betting analysis? Click below and join insider bets!**
+
+📅 [See all {current_date_readable} MLB Previews →](https://www.thebettinginsider.com/mlb-blogs/{current_date})
+
 CRITICAL RULES:
 1. Use ONLY the JSON data provided below - NO external stats or guessing
 2. If data is missing, say "data not available" rather than inventing
@@ -669,6 +819,7 @@ CRITICAL RULES:
 12. NEVER suggest a strikeout prop unless K% > 25% AND increase > 4%
 13. Use the prop alert boxes (>) for any qualifying recommendations
 14. OUTPUT MUST BE VALID MARKDOWN - USE # ## ### HEADERS, NOT HTML
+15. ALWAYS include the CTA and daily roundup link at the end
 
 Blog Title: {seo_title}
 Target Keywords: {keywords}
@@ -736,45 +887,66 @@ def generate_and_publish_daily_blogs():
             blog_post_with_links = auto_link_blog_content(blog_post)
             print("  ✅ Internal links added")
             
-            # Create composite cover image with fallback
-            print("  🖼️ Creating composite cover image...")
+            # Create simple team cover image (1200x800)
+            print("  🖼️ Creating team cover image...")
             away_team = game_data['away_team']
             home_team = game_data['home_team']
-            away_logo_url = get_team_logo_url(away_team)
             home_logo_url = get_team_logo_url(home_team)
             
             cover_image_url = None
             
             try:
-                # Try to create and upload composite image first
-                cover_image_buffer = create_composite_cover_image(
-                    away_team, home_team, away_logo_url, home_logo_url
-                )
+                # Create simple team cover image
+                cover_image_buffer = create_simple_team_cover_image(home_team, home_logo_url)
                 
                 if cover_image_buffer:
-                    print("  ☁️ Uploading composite image to Webflow...")
-                    cover_filename = f"{away_team.lower()}-vs-{home_team.lower()}-{datetime.now().strftime('%Y%m%d')}.png"
+                    print("  ☁️ Uploading team cover image to Webflow...")
+                    cover_filename = f"{home_team.lower()}-cover-{datetime.now().strftime('%Y%m%d')}.png"
                     
                     start_time = time.time()
                     cover_image_url = upload_image_to_webflow(cover_image_buffer, cover_filename)
                     upload_time = time.time() - start_time
                     
                     if cover_image_url:
-                        print(f"  ✅ Composite image uploaded in {upload_time:.1f}s")
+                        print(f"  ✅ Cover image uploaded in {upload_time:.1f}s")
                     else:
-                        print(f"  ⚠️ Composite upload failed after {upload_time:.1f}s")
-                
-                # Fallback: Use direct ESPN logo URL if composite failed
-                if not cover_image_url:
-                    print("  🔄 Fallback: Using home team logo directly...")
-                    cover_image_url = home_logo_url  # Use home team logo as fallback
-                    print(f"  ✅ Using fallback image: {cover_image_url}")
+                        print(f"  ⚠️ Cover upload failed - using direct logo URL")
+                        cover_image_url = home_logo_url
+                else:
+                    print("  ⚠️ Cover image creation failed - using direct logo URL")
+                    cover_image_url = home_logo_url
                     
             except Exception as e:
-                print(f"  ⚠️ Image processing error: {e}")
-                # Fallback to direct logo URL
+                print(f"  ⚠️ Image processing error: {e} - using direct logo URL")
                 cover_image_url = home_logo_url
-                print(f"  ✅ Using fallback image: {cover_image_url}")
+            
+            # Generate pitch mix charts
+            print("  📊 Generating pitch mix charts...")
+            away_pitcher = game_data.get('away_pitcher', {})
+            home_pitcher = game_data.get('home_pitcher', {})
+            
+            # Save charts to game directory
+            game_directory = f"temp_charts_{i}"
+            if not os.path.exists(game_directory):
+                os.makedirs(game_directory)
+            
+            away_chart_path = os.path.join(game_directory, "pitch_mix_away.png")
+            home_chart_path = os.path.join(game_directory, "pitch_mix_home.png")
+            
+            generate_pitch_mix_chart(
+                away_pitcher.get('name', 'Away Pitcher'), 
+                away_pitcher.get('arsenal', ''), 
+                away_chart_path
+            )
+            generate_pitch_mix_chart(
+                home_pitcher.get('name', 'Home Pitcher'), 
+                home_pitcher.get('arsenal', ''), 
+                home_chart_path
+            )
+            
+            # Add pitch mix charts to blog content
+            blog_post_with_links += f"\n\n![Pitch Mix - {away_pitcher.get('name', 'Away Pitcher')}](pitch_mix_away.png)"
+            blog_post_with_links += f"\n![Pitch Mix - {home_pitcher.get('name', 'Home Pitcher')}](pitch_mix_home.png)"
             
             # Webflow requires a cover image, so we must have one
             if not cover_image_url:
@@ -790,6 +962,13 @@ def generate_and_publish_daily_blogs():
                 print(f"  ✅ Successfully published to Webflow")
             else:
                 print(f"  ❌ Failed to create Webflow post")
+            
+            # Clean up temp directory
+            try:
+                import shutil
+                shutil.rmtree(game_directory)
+            except:
+                pass
             
             # Small delay between posts to avoid rate limits
             time.sleep(1)
@@ -808,6 +987,7 @@ def generate_and_publish_daily_blogs():
             print(f"🎉 Successfully published {successful_posts} blog posts to Webflow!")
         else:
             print(f"⚠️ Posts created but site publish failed - check Webflow dashboard")
+            print("   You may need to manually publish the site in Webflow")
     else:
         print("❌ No posts were successfully created")
 
