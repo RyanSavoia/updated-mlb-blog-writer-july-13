@@ -1,0 +1,16 @@
+services:
+  - type: cron
+    name: mlb-auto-blog-writer-webflow
+    env: python
+    schedule: "0 11 * * *"  # Run daily at 11 AM UTC (7 AM EDT)
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: WEBFLOW_API_TOKEN
+        sync: false
+      - key: WEBFLOW_SITE_ID
+        value: "580e63e98c9a982ac9b8b741"
+      - key: WEBFLOW_COLLECTION_ID
+        value: "67afe23466e94ab5d181cdd99"
