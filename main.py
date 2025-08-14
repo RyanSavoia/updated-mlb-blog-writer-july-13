@@ -177,65 +177,90 @@ def test_webflow_connection():
         return False
 
 def create_simple_team_cover_image(team_name, logo_url):
-    """Create a simple 1200x800 cover image with team logo"""
+    """Create a properly sized 1200x800 cover image with team logo"""
     try:
-        # Download team logo with proper headers
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(logo_url, timeout=10, headers=headers)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        # Download team logo
+        response = requests.get(logo_url, timeout=10)
+        response.raise_for_status()  # Raise exception for bad status codes
+        logo_img = Image.open(BytesIO(response.content)).convert('RGBA')
         
-        # Verify we got image data
-        if len(response.content) < 1000:  # Less than 1KB probably not a valid image
-            print(f"  ⚠️ Logo download too small ({len(response.content)} bytes), using fallback")
-            raise Exception("Logo file too small")
-        
-        logo_img = Image.open(BytesIO(response.content))
-        
-        # Convert to RGBA to handle transparency properly
-        if logo_img.mode != 'RGBA':
-            logo_img = logo_img.convert('RGBA')
-        
-        # Create canvas (1200x800 as requested)
+        # Create canvas (1200x800 as specified)
         canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
         draw = ImageDraw.Draw(canvas)
         
-        # Resize logo to fit nicely (400x400 max, maintaining aspect ratio)
-        logo_img.thumbnail((400, 400), Image.Resampling.LANCZOS)
+        # Calculate logo size - make it bigger to fill the space better
+        # Use 600x600 max to be more prominent on the 1200x800 canvas
+        original_size = logo_img.size
+        aspect_ratio = original_size[0] / original_size[1]
         
-        # Center the logo
-        logo_x = (1200 - logo_img.width) // 2
-        logo_y = (800 - logo_img.height) // 2 - 50  # Slightly higher
+        if aspect_ratio > 1:  # Wider than tall
+            logo_width = min(600, original_size[0])
+            logo_height = int(logo_width / aspect_ratio)
+        else:  # Taller than wide or square
+            logo_height = min(600, original_size[1])
+            logo_width = int(logo_height * aspect_ratio)
         
-        # Paste logo with proper transparency handling
-        canvas.paste(logo_img, (logo_x, logo_y), logo_img)
+        logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
         
-        # Add team name below logo
+        # Center the logo perfectly on the canvas
+        logo_x = (1200 - logo_width) // 2
+        logo_y = (800 - logo_height) // 2 - 40  # Slightly higher to leave room for text
+        
+        # Paste logo with transparency support
+        if logo_img.mode == 'RGBA':
+            canvas.paste(logo_img, (logo_x, logo_y), logo_img)
+        else:
+            canvas.paste(logo_img, (logo_x, logo_y))
+        
+        # Add team name below logo with better font handling
         try:
-            font = ImageFont.truetype("arial.ttf", 48)
-        except:
-            try:
-                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
-            except:
+            # Try different font paths
+            font_paths = [
+                "/System/Library/Fonts/Arial.ttf",  # macOS
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
+                "C:/Windows/Fonts/arial.ttf",  # Windows
+                "arial.ttf"  # Generic
+            ]
+            
+            font = None
+            for font_path in font_paths:
+                try:
+                    font = ImageFont.truetype(font_path, 48)
+                    break
+                except:
+                    continue
+                    
+            if font is None:
                 font = ImageFont.load_default()
+                
+        except Exception as e:
+            print(f"⚠️ Font loading issue: {e}")
+            font = ImageFont.load_default()
         
-        # Team name
+        # Add team name text
         bbox = draw.textbbox((0, 0), team_name, font=font)
         text_width = bbox[2] - bbox[0]
         text_x = (1200 - text_width) // 2
-        text_y = logo_y + logo_img.height + 30
+        text_y = logo_y + logo_height + 30
+        
+        # Add text shadow for better visibility
+        shadow_offset = 2
+        draw.text((text_x + shadow_offset, text_y + shadow_offset), team_name, fill='#333333', font=font)
         draw.text((text_x, text_y), team_name, fill='white', font=font)
         
         # Save to BytesIO for upload
         img_buffer = BytesIO()
-        canvas.save(img_buffer, format='PNG', quality=95)
+        canvas.save(img_buffer, format='PNG', quality=95, optimize=True)
         img_buffer.seek(0)
         
-        print(f"  ✅ Created cover image: {canvas.width}x{canvas.height}")
+        print(f"  ✅ Created {logo_width}x{logo_height} logo on 1200x800 canvas for {team_name}")
         return img_buffer
         
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error downloading logo from {logo_url}: {e}")
+        return None
     except Exception as e:
         print(f"❌ Error creating team cover image: {e}")
-        print(f"   Logo URL was: {logo_url}")
         return None
 
 def upload_image_to_webflow(image_buffer, filename):
@@ -248,6 +273,8 @@ def upload_image_to_webflow(image_buffer, filename):
         file_content = image_buffer.read()
         file_hash = hashlib.md5(file_content).hexdigest()
         image_buffer.seek(0)
+        
+        print(f"  📊 File hash: {file_hash}, Size: {len(file_content)} bytes")
         
         # Step 2: Create asset metadata to get upload URL
         metadata_payload = {
@@ -268,6 +295,7 @@ def upload_image_to_webflow(image_buffer, filename):
             return None
         
         asset_data = response.json()
+        print(f"  📤 Asset metadata created: {asset_data.get('id', 'Unknown ID')}")
         
         # Extract the hosted URL directly from response
         hosted_url = asset_data.get('hostedUrl') or asset_data.get('assetUrl')
@@ -281,6 +309,7 @@ def upload_image_to_webflow(image_buffer, filename):
         
         if not upload_url:
             print("❌ No upload URL returned from Webflow")
+            print(f"   Response data: {asset_data}")
             return None
         
         # Step 3: Upload file to S3 using the provided URL and details
@@ -299,11 +328,12 @@ def upload_image_to_webflow(image_buffer, filename):
         )
         
         if s3_response.status_code in [200, 201, 204]:
-            print(f"  ✅ Successfully uploaded to S3")
+            print(f"  ✅ Successfully uploaded to S3: {s3_response.status_code}")
             # Return the asset URL from the original response
             return asset_data.get('url') or asset_data.get('publicUrl') or f"https://uploads-ssl.webflow.com/{file_hash}/{filename}"
         else:
             print(f"❌ Failed to upload to S3: {s3_response.status_code}")
+            print(f"   S3 Response: {s3_response.text}")
             return None
             
     except Exception as e:
@@ -378,10 +408,14 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
                 "post-body": rich_text_content,
                 "post-summary": summary,
                 "main-image": cover_image_url,
+                "url": "https://www.thebettinginsider.com/betting/about",
                 "meta-title": title,
                 "meta-description": meta_desc
             }
         }
+        
+        print(f"  📝 Creating post: {title}")
+        print(f"  🖼️ Cover image: {cover_image_url}")
         
         # Create the post
         response = requests.post(
@@ -476,19 +510,19 @@ def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
         away_img = Image.open(BytesIO(away_response.content)).convert('RGBA')
         home_img = Image.open(BytesIO(home_response.content)).convert('RGBA')
         
-        # Create canvas (1200x630 for social media)
-        canvas = Image.new('RGB', (1200, 630), color='#1a1a1a')
+        # Create canvas (1200x800 to match your spec)
+        canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
         draw = ImageDraw.Draw(canvas)
         
         # Resize logos to fit nicely
-        logo_size = (200, 200)
+        logo_size = (250, 250)  # Bigger logos for better visibility
         away_img = away_img.resize(logo_size, Image.Resampling.LANCZOS)
         home_img = home_img.resize(logo_size, Image.Resampling.LANCZOS)
         
         # Position logos with "VS" between them
-        away_x = 250
+        away_x = 200
         home_x = 750
-        logo_y = 215
+        logo_y = 275  # Center vertically on 800px canvas
         
         # Paste logos (handle transparency)
         canvas.paste(away_img, (away_x, logo_y), away_img if away_img.mode == 'RGBA' else None)
@@ -505,7 +539,7 @@ def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
         bbox = draw.textbbox((0, 0), vs_text, font=font)
         text_width = bbox[2] - bbox[0]
         text_x = (1200 - text_width) // 2
-        text_y = 300
+        text_y = 375  # Center between logos
         
         draw.text((text_x, text_y), vs_text, fill='white', font=font)
         
@@ -518,16 +552,16 @@ def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
         # Away team name
         away_bbox = draw.textbbox((0, 0), away_team, font=team_font)
         away_text_width = away_bbox[2] - away_bbox[0]
-        away_text_x = away_x + (200 - away_text_width) // 2
-        draw.text((away_text_x, logo_y + 220), away_team, fill='white', font=team_font)
+        away_text_x = away_x + (250 - away_text_width) // 2
+        draw.text((away_text_x, logo_y + 270), away_team, fill='white', font=team_font)
         
         # Home team name
         home_bbox = draw.textbbox((0, 0), home_team, font=team_font)
         home_text_width = home_bbox[2] - home_bbox[0]
-        home_text_x = home_x + (200 - home_text_width) // 2
-        draw.text((home_text_x, logo_y + 220), home_team, fill='white', font=team_font)
+        home_text_x = home_x + (250 - home_text_width) // 2
+        draw.text((home_text_x, logo_y + 270), home_team, fill='white', font=team_font)
         
-        # Add title
+        # Add title at top
         title = f"{away_team} vs {home_team} - MLB Preview"
         try:
             title_font = ImageFont.truetype("arial.ttf", 32)
@@ -655,14 +689,15 @@ def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
 
 # ==================== INTERLINKING LOGIC ====================
 INTERLINK_MAP = {
-    # Stats product
-    "betting splits": "https://www.thebettinginsider.com/stats-about",
-    "public money": "https://www.thebettinginsider.com/stats-about",
-    "betting percentage": "https://www.thebettinginsider.com/stats-about",
-    "sharp money": "https://www.thebettinginsider.com/stats-about",
-    "betting trends": "https://www.thebettinginsider.com/stats-about",
-    "stats dashboard": "https://www.thebettinginsider.com/stats-about",
-    # Pitcher arsenal tool
+    # FIXED: Updated URLs to point to /betting/about as requested
+    "betting splits": "https://www.thebettinginsider.com/betting/about",
+    "public money": "https://www.thebettinginsider.com/betting/about", 
+    "betting percentage": "https://www.thebettinginsider.com/betting/about",
+    "sharp money": "https://www.thebettinginsider.com/betting/about",
+    "betting trends": "https://www.thebettinginsider.com/betting/about",
+    "stats dashboard": "https://www.thebettinginsider.com/betting/about",
+    
+    # Pitcher arsenal tool - keeping these as they were
     "pitcher arsenal data": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "pitch mix": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "arsenal-specific performance": "https://www.thebettinginsider.com/daily-mlb-game-stats",
@@ -675,7 +710,14 @@ INTERLINK_MAP = {
     "K-rate": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "strikeout rate": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "whiff rate": "https://www.thebettinginsider.com/daily-mlb-game-stats",
-    "swing and miss %": "https://www.thebettinginsider.com/daily-mlb-game-stats"
+    "swing and miss %": "https://www.thebettinginsider.com/daily-mlb-game-stats",
+    
+    # Additional betting-related phrases that should go to /betting/about
+    "betting analysis": "https://www.thebettinginsider.com/betting/about",
+    "betting preview": "https://www.thebettinginsider.com/betting/about",
+    "betting insights": "https://www.thebettinginsider.com/betting/about",
+    "betting edge": "https://www.thebettinginsider.com/betting/about",
+    "betting recommendation": "https://www.thebettinginsider.com/betting/about"
 }
 
 def auto_link_blog_content(blog_text, max_links=5):
@@ -989,7 +1031,7 @@ def generate_and_publish_daily_blogs():
                 
                 if cover_image_buffer:
                     print("  ☁️ Uploading team cover image to Webflow...")
-                    cover_filename = f"{home_team.lower()}-cover-{datetime.now().strftime('%Y%m%d')}.png"
+                    cover_filename = f"{home_team.lower().replace(' ', '-')}-cover-{datetime.now().strftime('%Y%m%d-%H%M')}.png"
                     
                     start_time = time.time()
                     cover_image_url = upload_image_to_webflow(cover_image_buffer, cover_filename)
