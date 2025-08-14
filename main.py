@@ -142,16 +142,16 @@ AUTHORS = [
         "bio": "Jake is a veteran sports analyst with over 10 years of MLB prop betting experience."
     },
     {
-        "name": "Melissa Rivera", 
-        "bio": "Melissa is a data-driven baseball enthusiast who specializes in pitch analytics and betting trends."
+        "name": "Michael Rivera", 
+        "bio": "Michael is a data-driven baseball enthusiast who specializes in pitch analytics and betting trends."
     },
     {
         "name": "Ryan Chen",
         "bio": "Ryan combines advanced statistics with traditional scouting to identify profitable betting opportunities."
     },
     {
-        "name": "Sarah Mitchell",
-        "bio": "Sarah has been analyzing MLB matchups and umpire tendencies for professional bettors since 2018."
+        "name": "David Mitchell",
+        "bio": "David has been analyzing MLB matchups and umpire tendencies for professional bettors since 2018."
     }
 ]
 
