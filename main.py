@@ -392,21 +392,61 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
 def publish_webflow_site():
     """Publish the Webflow site to make posts live"""
     try:
-        # Step 1: Get domain IDs from the site
-        print("  🔍 Getting domain IDs...")
-        domains_response = requests.get(
-            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/domains',
+        print("  🌐 Publishing Webflow site...")
+        
+        # Your specific domain IDs
+        domain_ids = [
+            "67e2e299d35c6ac356b6d8d4",  # thebettinginsider.com
+            "67e2e299d35c6ac356b6d8ca"   # www.thebettinginsider.com
+        ]
+        
+        # Publish payload with your domain IDs
+        publish_payload = {
+            "domains": domain_ids
+        }
+        
+        response = requests.post(
+            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
             headers=WEBFLOW_HEADERS,
-            timeout=30
+            json=publish_payload,
+            timeout=60
         )
         
-        if domains_response.status_code == 200:
-            domains_data = domains_response.json()
-            domain_ids = []
+        if response.status_code == 202:  # Webflow returns 202 for successful publish
+            print("  ✅ Site published successfully to both domains!")
+            print("    • thebettinginsider.com")
+            print("    • www.thebettinginsider.com")
+            return True
+        elif response.status_code == 200:
+            print("  ✅ Site published successfully!")
+            return True
+        else:
+            print(f"  ❌ Publish failed: {response.status_code}")
+            print(f"     Response: {response.text}")
             
-            # Extract domain IDs from response
-            if isinstance(domains_data, dict) and 'domains' in domains_data:
-                domains
+            # Try publishing to webflow subdomain as fallback
+            print("  🔄 Trying Webflow subdomain fallback...")
+            fallback_payload = {
+                "publishToWebflowSubdomain": True
+            }
+            
+            fallback_response = requests.post(
+                f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
+                headers=WEBFLOW_HEADERS,
+                json=fallback_payload,
+                timeout=60
+            )
+            
+            if fallback_response.status_code in [200, 202]:
+                print("  ✅ Published to Webflow subdomain successfully!")
+                return True
+            else:
+                print(f"  ❌ Fallback also failed: {fallback_response.status_code}")
+                return False
+                
+    except Exception as e:
+        print(f"❌ Error publishing site: {e}")
+        return False
 
 def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
     """Create a composite cover image with both team logos"""
