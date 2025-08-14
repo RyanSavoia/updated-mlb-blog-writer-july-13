@@ -869,24 +869,23 @@ If umpire field is "TBA" or missing:
 "Umpire assignment has not been announced, which makes prop volatility a concern."
 
 ## {headers['lean']}
-**Final Lean & Betting Takeaway**
 
-STEP-BY-STEP BETTING ANALYSIS:
+**What to Bet On**
 
 STEP 1: Check ALL individual batters for prop opportunities
 Go through every batter in away_key_performers and home_key_performers
 BATTING LEAN CRITERIA: arsenal_ba > 0.300 AND (arsenal_ba - season_ba) > 0.020
 If ANY batter meets BOTH criteria, create a prop alert like this:
-> 📢 **Prop Alert**: [Player Name] (.XXX → .XXX, +XX points) meets betting lean criteria!
+📢 **Prop Alert**: [Player Name] (.XXX → .XXX, +XX points) meets betting lean criteria!
 
 STEP 2: Check team strikeout rates for pitcher props
 Check away_arsenal_k_pct vs away_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER
 Check home_arsenal_k_pct vs home_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER
 If criteria met, create strikeout alert:
-> ⚡ **K Prop Alert**: [Pitcher Name] strikeout OVER - [Team]'s K-rate jumps to XX.X% vs this arsenal!
+⚡ **K Prop Alert**: [Pitcher Name] strikeout OVER - [Team]'s K-rate jumps to XX.X% vs this arsenal!
 
 STEP 3: Report findings
-If NO criteria met: "No significant statistical edges meet our betting threshold in this matchup."
+If NO criteria met: No significant statistical edges meet our betting threshold in this matchup.
 
 ## 🔑 Key Takeaways
 Create 3-4 bullet points summarizing the main insights:
@@ -910,7 +909,7 @@ A: [Game time from game_time field]
 
 **Want more of our best props and betting analysis? Click below and join insider bets!**
 
-📅 [See all {current_date_readable} MLB Previews →](https://www.thebettinginsider.com/insider-blog)
+[See all our best bets daily!](https://www.thebettinginsider.com/betting/about)
 
 CRITICAL RULES:
 1. Use ONLY the JSON data provided below - NO external stats or guessing
