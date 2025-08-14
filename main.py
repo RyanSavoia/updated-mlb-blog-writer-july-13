@@ -179,36 +179,50 @@ def test_webflow_connection():
 def create_simple_team_cover_image(team_name, logo_url):
     """Create a simple 1200x800 cover image with team logo"""
     try:
-        # Download team logo
-        response = requests.get(logo_url, timeout=10)
-        logo_img = Image.open(BytesIO(response.content)).convert('RGBA')
+        # Download team logo with proper headers
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(logo_url, timeout=10, headers=headers)
+        response.raise_for_status()  # Raise an exception for bad status codes
         
-        # Create canvas (1200x800 for proper aspect ratio)
+        # Verify we got image data
+        if len(response.content) < 1000:  # Less than 1KB probably not a valid image
+            print(f"  ⚠️ Logo download too small ({len(response.content)} bytes), using fallback")
+            raise Exception("Logo file too small")
+        
+        logo_img = Image.open(BytesIO(response.content))
+        
+        # Convert to RGBA to handle transparency properly
+        if logo_img.mode != 'RGBA':
+            logo_img = logo_img.convert('RGBA')
+        
+        # Create canvas (1200x800 as requested)
         canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
         draw = ImageDraw.Draw(canvas)
         
-        # Resize logo to fit nicely (400x400 max)
-        logo_size = (400, 400)
-        logo_img = logo_img.resize(logo_size, Image.Resampling.LANCZOS)
+        # Resize logo to fit nicely (400x400 max, maintaining aspect ratio)
+        logo_img.thumbnail((400, 400), Image.Resampling.LANCZOS)
         
         # Center the logo
-        logo_x = (1200 - logo_size[0]) // 2
-        logo_y = (800 - logo_size[1]) // 2 - 50  # Slightly higher
+        logo_x = (1200 - logo_img.width) // 2
+        logo_y = (800 - logo_img.height) // 2 - 50  # Slightly higher
         
-        # Paste logo (handle transparency)
-        canvas.paste(logo_img, (logo_x, logo_y), logo_img if logo_img.mode == 'RGBA' else None)
+        # Paste logo with proper transparency handling
+        canvas.paste(logo_img, (logo_x, logo_y), logo_img)
         
         # Add team name below logo
         try:
             font = ImageFont.truetype("arial.ttf", 48)
         except:
-            font = ImageFont.load_default()
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
+            except:
+                font = ImageFont.load_default()
         
         # Team name
         bbox = draw.textbbox((0, 0), team_name, font=font)
         text_width = bbox[2] - bbox[0]
         text_x = (1200 - text_width) // 2
-        text_y = logo_y + logo_size[1] + 30
+        text_y = logo_y + logo_img.height + 30
         draw.text((text_x, text_y), team_name, fill='white', font=font)
         
         # Save to BytesIO for upload
@@ -216,10 +230,12 @@ def create_simple_team_cover_image(team_name, logo_url):
         canvas.save(img_buffer, format='PNG', quality=95)
         img_buffer.seek(0)
         
+        print(f"  ✅ Created cover image: {canvas.width}x{canvas.height}")
         return img_buffer
         
     except Exception as e:
         print(f"❌ Error creating team cover image: {e}")
+        print(f"   Logo URL was: {logo_url}")
         return None
 
 def upload_image_to_webflow(image_buffer, filename):
@@ -362,7 +378,6 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
                 "post-body": rich_text_content,
                 "post-summary": summary,
                 "main-image": cover_image_url,
-                "url": "https://www.thebettinginsider.com/betting/about",
                 "meta-title": title,
                 "meta-description": meta_desc
             }
