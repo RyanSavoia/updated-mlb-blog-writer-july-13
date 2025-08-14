@@ -53,7 +53,7 @@ TEAM_LOGOS = {
     'ATL': 'atl', 'Braves': 'atl',
     'NYM': 'nym', 'Mets': 'nym',
     'PHI': 'phi', 'Phillies': 'phi',
-    'WSN': 'wsh', 'WSH': 'wsh', 'Nationals': 'wsh',
+    'WSN': 'wsh', 'Nationals': 'wsh',
     'MIA': 'mia', 'Marlins': 'mia',
     'CHC': 'chc', 'Cubs': 'chc',
     'MIL': 'mil', 'Brewers': 'mil',
@@ -139,7 +139,7 @@ def get_team_logo_url(team_name):
 def test_webflow_connection():
     """Test Webflow API connection and site access"""
     try:
-        # Step 1: Calculate MD5 hash
+        # Test site access
         print(f"  Testing Site ID: {WEBFLOW_SITE_ID}")
         response = requests.get(
             f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}',
@@ -177,401 +177,39 @@ def test_webflow_connection():
         return False
 
 def create_simple_team_cover_image(team_name, logo_url):
-    """Create a properly sized 1200x800 cover image with team logo"""
+    """Create a simple 1200x800 cover image with team logo"""
     try:
         # Download team logo
         response = requests.get(logo_url, timeout=10)
-        response.raise_for_status()  # Raise exception for bad status codes
         logo_img = Image.open(BytesIO(response.content)).convert('RGBA')
         
-        # Create canvas (1200x800 as specified)
+        # Create canvas (1200x800 for proper aspect ratio)
         canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
         draw = ImageDraw.Draw(canvas)
         
-        # Calculate logo size - make it bigger to fill the space better
-        # Use 600x600 max to be more prominent on the 1200x800 canvas
-        original_size = logo_img.size
-        aspect_ratio = original_size[0] / original_size[1]
+        # Resize logo to fit nicely (400x400 max)
+        logo_size = (400, 400)
+        logo_img = logo_img.resize(logo_size, Image.Resampling.LANCZOS)
         
-        if aspect_ratio > 1:  # Wider than tall
-            logo_width = min(600, original_size[0])
-            logo_height = int(logo_width / aspect_ratio)
-        else:  # Taller than wide or square
-            logo_height = min(600, original_size[1])
-            logo_width = int(logo_height * aspect_ratio)
+        # Center the logo
+        logo_x = (1200 - logo_size[0]) // 2
+        logo_y = (800 - logo_size[1]) // 2 - 50  # Slightly higher
         
-        logo_img = logo_img.resize((logo_width, logo_height), Image.Resampling.LANCZOS)
+        # Paste logo (handle transparency)
+        canvas.paste(logo_img, (logo_x, logo_y), logo_img if logo_img.mode == 'RGBA' else None)
         
-        # Center the logo perfectly on the canvas
-        logo_x = (1200 - logo_width) // 2
-        logo_y = (800 - logo_height) // 2 - 40  # Slightly higher to leave room for text
-        
-        # Paste logo with transparency support
-        if logo_img.mode == 'RGBA':
-            canvas.paste(logo_img, (logo_x, logo_y), logo_img)
-        else:
-            canvas.paste(logo_img, (logo_x, logo_y))
-        
-        # Add team name below logo with better font handling
+        # Add team name below logo
         try:
-            # Try different font paths
-            font_paths = [
-                "/System/Library/Fonts/Arial.ttf",  # macOS
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
-                "C:/Windows/Fonts/arial.ttf",  # Windows
-                "arial.ttf"  # Generic
-            ]
-            
-            font = None
-            for font_path in font_paths:
-                try:
-                    font = ImageFont.truetype(font_path, 48)
-                    break
-                except:
-                    continue
-                    
-            if font is None:
-                font = ImageFont.load_default()
-                
-        except Exception as e:
-            print(f"⚠️ Font loading issue: {e}")
-            font = ImageFont.load_default()
-        
-        # Add team name text
-        bbox = draw.textbbox((0, 0), team_name, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_x = (1200 - text_width) // 2
-        text_y = logo_y + logo_height + 30
-        
-        # Add text shadow for better visibility
-        shadow_offset = 2
-        draw.text((text_x + shadow_offset, text_y + shadow_offset), team_name, fill='#333333', font=font)
-        draw.text((text_x, text_y), team_name, fill='white', font=font)
-        
-        # Save to BytesIO for upload
-        img_buffer = BytesIO()
-        canvas.save(img_buffer, format='PNG', quality=95, optimize=True)
-        img_buffer.seek(0)
-        
-        print(f"  ✅ Created {logo_width}x{logo_height} logo on 1200x800 canvas for {team_name}")
-        return img_buffer
-        
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Error downloading logo from {logo_url}: {e}")
-        return None
-    except Exception as e:
-        print(f"❌ Error creating team cover image: {e}")
-        return None
-
-def upload_image_to_webflow(image_buffer, filename):
-    """Upload image to Webflow assets using the two-step process"""
-    import hashlib
-    
-    try:
-        # Step 1: Calculate MD5 hash
-        image_buffer.seek(0)
-        file_content = image_buffer.read()
-        file_hash = hashlib.md5(file_content).hexdigest()
-        image_buffer.seek(0)
-        
-        print(f"  📊 File hash: {file_hash}, Size: {len(file_content)} bytes")
-        
-        # Step 2: Create asset metadata to get upload URL
-        metadata_payload = {
-            "fileName": filename,
-            "fileHash": file_hash,
-            "originUrl": None
-        }
-        
-        response = requests.post(
-            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/assets',
-            headers=WEBFLOW_HEADERS,
-            json=metadata_payload,
-            timeout=30
-        )
-        
-        if response.status_code not in [201, 202]:  # Accept both 201 and 202
-            print(f"❌ Failed to create asset metadata: {response.status_code} - {response.text}")
-            return None
-        
-        asset_data = response.json()
-        print(f"  📤 Asset metadata created: {asset_data.get('id', 'Unknown ID')}")
-        
-        # Extract the hosted URL directly from response
-        hosted_url = asset_data.get('hostedUrl') or asset_data.get('assetUrl')
-        if hosted_url:
-            print(f"  ✅ Asset created successfully: {hosted_url}")
-            return hosted_url
-        
-        # Fallback to upload process if no direct URL
-        upload_url = asset_data.get('uploadUrl')
-        upload_details = asset_data.get('uploadDetails', {})
-        
-        if not upload_url:
-            print("❌ No upload URL returned from Webflow")
-            print(f"   Response data: {asset_data}")
-            return None
-        
-        # Step 3: Upload file to S3 using the provided URL and details
-        upload_headers = {}
-        files = {'file': (filename, image_buffer, 'image/png')}
-        
-        # Add any required fields from upload_details
-        upload_data = upload_details.copy() if upload_details else {}
-        
-        s3_response = requests.post(
-            upload_url,
-            headers=upload_headers,
-            files=files,
-            data=upload_data,
-            timeout=60
-        )
-        
-        if s3_response.status_code in [200, 201, 204]:
-            print(f"  ✅ Successfully uploaded to S3: {s3_response.status_code}")
-            # Return the asset URL from the original response
-            return asset_data.get('url') or asset_data.get('publicUrl') or f"https://uploads-ssl.webflow.com/{file_hash}/{filename}"
-        else:
-            print(f"❌ Failed to upload to S3: {s3_response.status_code}")
-            print(f"   S3 Response: {s3_response.text}")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error uploading image to Webflow: {e}")
-        return None
-
-def markdown_to_webflow_rich_text(markdown_content):
-    """Convert markdown to Webflow-compatible HTML"""
-    # Basic markdown to HTML conversion
-    html = markdown_content
-    
-    # Headers
-    html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
-    html = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
-    html = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
-    
-    # Bold and italic
-    html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
-    html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
-    
-    # Links
-    html = re.sub(r'\[([^\]]+)\]\(([^\)]+)\)', r'<a href="\2">\1</a>', html)
-    
-    # Prop alert boxes (blockquotes)
-    html = re.sub(r'^> 📢 (.*?)$', r'<div style="background:#f2f2f2; padding:12px; border-left:4px solid #4CAF50; margin:15px 0;"><strong>📢 \1</strong></div>', html, flags=re.MULTILINE)
-    html = re.sub(r'^> ⚡ (.*?)$', r'<div style="background:#f2f2f2; padding:12px; border-left:4px solid #FF9800; margin:15px 0;"><strong>⚡ \1</strong></div>', html, flags=re.MULTILINE)
-    
-    # Bullet points
-    html = re.sub(r'^- (.*?)$', r'<li>\1</li>', html, flags=re.MULTILINE)
-    html = re.sub(r'(<li>.*?</li>)', r'<ul>\1</ul>', html, flags=re.DOTALL)
-    html = re.sub(r'</ul>\s*<ul>', '', html)  # Merge consecutive lists
-    
-    # Paragraphs
-    html = re.sub(r'\n\n', '</p><p>', html)
-    html = f'<p>{html}</p>'
-    
-    # Clean up empty paragraphs
-    html = re.sub(r'<p>\s*</p>', '', html)
-    
-    return html
-
-def create_webflow_post(game_data, blog_content, cover_image_url):
-    """Create a new post in Webflow CMS"""
-    try:
-        # Extract title from blog content
-        lines = blog_content.strip().split('\n')
-        title = lines[0].replace('#', '').strip() if lines else f"{game_data['matchup']} Preview"
-        
-        # Create post summary (first paragraph, max 160 chars)
-        summary = ""
-        for line in lines[2:]:  # Skip title and date
-            if line.strip() and not line.startswith('#') and not line.startswith('*'):
-                summary = line.strip()[:157] + "..." if len(line.strip()) > 160 else line.strip()
-                break
-        
-        # Create SEO meta description with keywords
-        away_team = game_data.get('away_team', '')
-        home_team = game_data.get('home_team', '')
-        meta_desc = f"Expert {away_team} vs {home_team} betting preview with pitcher analysis, lineup matchups, and prop recommendations. {datetime.now().strftime('%B %d')} MLB betting insights."
-        if len(meta_desc) > 250:
-            meta_desc = meta_desc[:247] + "..."
-        
-        # Convert markdown to Webflow rich text
-        rich_text_content = markdown_to_webflow_rich_text(blog_content)
-        
-        # Prepare Webflow CMS item data
-        webflow_data = {
-            "isArchived": False,
-            "isDraft": False,
-            "fieldData": {
-                "name": title,
-                "post-body": rich_text_content,
-                "post-summary": summary,
-                "main-image": cover_image_url,
-                "url": "https://www.thebettinginsider.com/betting/about",
-                "meta-title": title,
-                "meta-description": meta_desc
-            }
-        }
-        
-        print(f"  📝 Creating post: {title}")
-        print(f"  🖼️ Cover image: {cover_image_url}")
-        
-        # Create the post
-        response = requests.post(
-            f'https://api.webflow.com/v2/collections/{WEBFLOW_COLLECTION_ID}/items',
-            headers=WEBFLOW_HEADERS,
-            json=webflow_data,
-            timeout=30
-        )
-        
-        if response.status_code == 202:  # Webflow returns 202 for successful creation
-            post_data = response.json()
-            print(f"  ✅ Created Webflow post: {title}")
-            return post_data
-        else:
-            print(f"  ❌ Failed to create Webflow post: {response.status_code}")
-            print(f"     Response: {response.text}")
-            return None
-            
-    except Exception as e:
-        print(f"❌ Error creating Webflow post: {e}")
-        return None
-
-def publish_webflow_site():
-    """Publish the Webflow site to make posts live"""
-    try:
-        print("  🌐 Publishing Webflow site...")
-        
-        # IMPORTANT: Webflow has a 1 publish per minute rate limit
-        time.sleep(3)  # Extra buffer for rate limiting
-        
-        # Correct API format per Webflow v2 documentation
-        publish_payload = {
-            "customDomains": [
-                "67e2e299d35c6ac356b6d8d4",  # thebettinginsider.com
-                "67e2e299d35c6ac356b6d8ca"   # www.thebettinginsider.com
-            ],
-            "publishToWebflowSubdomain": True
-        }
-        
-        response = requests.post(
-            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
-            headers=WEBFLOW_HEADERS,
-            json=publish_payload,
-            timeout=90  # Longer timeout for publish
-        )
-        
-        if response.status_code in [200, 202]:
-            print("  ✅ Site published successfully!")
-            print("    • thebettinginsider.com")
-            print("    • www.thebettinginsider.com")
-            print("    • Webflow subdomain")
-            return True
-        else:
-            print(f"  ❌ Publish failed: {response.status_code}")
-            print(f"     Response: {response.text}")
-            
-            # If custom domains fail, try just the subdomain
-            print("  🔄 Trying subdomain-only publish...")
-            time.sleep(3)  # Rate limit protection
-            
-            fallback_payload = {
-                "publishToWebflowSubdomain": True
-            }
-            
-            fallback_response = requests.post(
-                f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
-                headers=WEBFLOW_HEADERS,
-                json=fallback_payload,
-                timeout=90
-            )
-            
-            if fallback_response.status_code in [200, 202]:
-                print("  ✅ Published to Webflow subdomain successfully!")
-                print("    Note: Custom domains may need manual publishing")
-                return True
-            else:
-                print(f"  ❌ Subdomain publish also failed: {fallback_response.status_code}")
-                print(f"     Response: {fallback_response.text}")
-                return False
-                
-    except Exception as e:
-        print(f"❌ Error publishing site: {e}")
-        return False
-
-def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
-    """Create a composite cover image with both team logos"""
-    try:
-        # Download team logos
-        away_response = requests.get(away_logo_url, timeout=10)
-        home_response = requests.get(home_logo_url, timeout=10)
-        
-        away_img = Image.open(BytesIO(away_response.content)).convert('RGBA')
-        home_img = Image.open(BytesIO(home_response.content)).convert('RGBA')
-        
-        # Create canvas (1200x800 to match your spec)
-        canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
-        draw = ImageDraw.Draw(canvas)
-        
-        # Resize logos to fit nicely
-        logo_size = (250, 250)  # Bigger logos for better visibility
-        away_img = away_img.resize(logo_size, Image.Resampling.LANCZOS)
-        home_img = home_img.resize(logo_size, Image.Resampling.LANCZOS)
-        
-        # Position logos with "VS" between them
-        away_x = 200
-        home_x = 750
-        logo_y = 275  # Center vertically on 800px canvas
-        
-        # Paste logos (handle transparency)
-        canvas.paste(away_img, (away_x, logo_y), away_img if away_img.mode == 'RGBA' else None)
-        canvas.paste(home_img, (home_x, logo_y), home_img if home_img.mode == 'RGBA' else None)
-        
-        # Add "VS" text
-        try:
-            # Try to load a font (fallback to default if not available)
             font = ImageFont.truetype("arial.ttf", 48)
         except:
             font = ImageFont.load_default()
         
-        vs_text = "VS"
-        bbox = draw.textbbox((0, 0), vs_text, font=font)
+        # Team name
+        bbox = draw.textbbox((0, 0), team_name, font=font)
         text_width = bbox[2] - bbox[0]
         text_x = (1200 - text_width) // 2
-        text_y = 375  # Center between logos
-        
-        draw.text((text_x, text_y), vs_text, fill='white', font=font)
-        
-        # Add team names
-        try:
-            team_font = ImageFont.truetype("arial.ttf", 24)
-        except:
-            team_font = ImageFont.load_default()
-        
-        # Away team name
-        away_bbox = draw.textbbox((0, 0), away_team, font=team_font)
-        away_text_width = away_bbox[2] - away_bbox[0]
-        away_text_x = away_x + (250 - away_text_width) // 2
-        draw.text((away_text_x, logo_y + 270), away_team, fill='white', font=team_font)
-        
-        # Home team name
-        home_bbox = draw.textbbox((0, 0), home_team, font=team_font)
-        home_text_width = home_bbox[2] - home_bbox[0]
-        home_text_x = home_x + (250 - home_text_width) // 2
-        draw.text((home_text_x, logo_y + 270), home_team, fill='white', font=team_font)
-        
-        # Add title at top
-        title = f"{away_team} vs {home_team} - MLB Preview"
-        try:
-            title_font = ImageFont.truetype("arial.ttf", 32)
-        except:
-            title_font = ImageFont.load_default()
-        
-        title_bbox = draw.textbbox((0, 0), title, font=title_font)
-        title_width = title_bbox[2] - title_bbox[0]
-        title_x = (1200 - title_width) // 2
-        draw.text((title_x, 100), title, fill='white', font=title_font)
+        text_y = logo_y + logo_size[1] + 30
+        draw.text((text_x, text_y), team_name, fill='white', font=font)
         
         # Save to BytesIO for upload
         img_buffer = BytesIO()
@@ -581,13 +219,8 @@ def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
         return img_buffer
         
     except Exception as e:
-        print(f"❌ Error creating composite image: {e}")
-        # Fallback: just download one logo
-        try:
-            response = requests.get(away_logo_url, timeout=10)
-            return BytesIO(response.content)
-        except:
-            return None
+        print(f"❌ Error creating team cover image: {e}")
+        return None
 
 def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
     """Generate a pie chart showing pitcher's pitch mix"""
@@ -687,17 +320,294 @@ def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
         print(f"❌ Error creating pitch mix chart for {pitcher_name}: {e}")
         return False
 
+def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
+    """Create a composite cover image with both team logos"""
+    try:
+        # Download team logos
+        away_response = requests.get(away_logo_url, timeout=10)
+        home_response = requests.get(home_logo_url, timeout=10)
+        
+        away_img = Image.open(BytesIO(away_response.content)).convert('RGBA')
+        home_img = Image.open(BytesIO(home_response.content)).convert('RGBA')
+        
+        # Create canvas (1200x630 for social media)
+        canvas = Image.new('RGB', (1200, 630), color='#1a1a1a')
+        draw = ImageDraw.Draw(canvas)
+        
+        # Resize logos to fit nicely
+        logo_size = (200, 200)
+        away_img = away_img.resize(logo_size, Image.Resampling.LANCZOS)
+        home_img = home_img.resize(logo_size, Image.Resampling.LANCZOS)
+        
+        # Position logos with "VS" between them
+        away_x = 250
+        home_x = 750
+        logo_y = 215
+        
+        # Paste logos (handle transparency)
+        canvas.paste(away_img, (away_x, logo_y), away_img if away_img.mode == 'RGBA' else None)
+        canvas.paste(home_img, (home_x, logo_y), home_img if home_img.mode == 'RGBA' else None)
+        
+        # Add "VS" text
+        try:
+            # Try to load a font (fallback to default if not available)
+            font = ImageFont.truetype("arial.ttf", 48)
+        except:
+            font = ImageFont.load_default()
+        
+        vs_text = "VS"
+        bbox = draw.textbbox((0, 0), vs_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_x = (1200 - text_width) // 2
+        text_y = 300
+        
+        draw.text((text_x, text_y), vs_text, fill='white', font=font)
+        
+        # Add team names
+        try:
+            team_font = ImageFont.truetype("arial.ttf", 24)
+        except:
+            team_font = ImageFont.load_default()
+        
+        # Away team name
+        away_bbox = draw.textbbox((0, 0), away_team, font=team_font)
+        away_text_width = away_bbox[2] - away_bbox[0]
+        away_text_x = away_x + (200 - away_text_width) // 2
+        draw.text((away_text_x, logo_y + 220), away_team, fill='white', font=team_font)
+        
+        # Home team name
+        home_bbox = draw.textbbox((0, 0), home_team, font=team_font)
+        home_text_width = home_bbox[2] - home_bbox[0]
+        home_text_x = home_x + (200 - home_text_width) // 2
+        draw.text((home_text_x, logo_y + 220), home_team, fill='white', font=team_font)
+        
+        # Add title
+        title = f"{away_team} vs {home_team} - MLB Preview"
+        try:
+            title_font = ImageFont.truetype("arial.ttf", 32)
+        except:
+            title_font = ImageFont.load_default()
+        
+        title_bbox = draw.textbbox((0, 0), title, font=title_font)
+        title_width = title_bbox[2] - title_bbox[0]
+        title_x = (1200 - title_width) // 2
+        draw.text((title_x, 100), title, fill='white', font=title_font)
+        
+        # Save to BytesIO for upload
+        img_buffer = BytesIO()
+        canvas.save(img_buffer, format='PNG', quality=95)
+        img_buffer.seek(0)
+        
+        return img_buffer
+        
+    except Exception as e:
+        print(f"❌ Error creating composite image: {e}")
+        # Fallback: just download one logo
+        try:
+            response = requests.get(away_logo_url, timeout=10)
+            return BytesIO(response.content)
+        except:
+            return None
+
+def upload_image_to_webflow(image_buffer, filename):
+    """Upload image to Webflow assets using the two-step process"""
+    import hashlib
+    
+    try:
+        # Step 1: Calculate MD5 hash
+        image_buffer.seek(0)
+        file_content = image_buffer.read()
+        file_hash = hashlib.md5(file_content).hexdigest()
+        image_buffer.seek(0)
+        
+        # Step 2: Create asset metadata to get upload URL
+        metadata_payload = {
+            "fileName": filename,
+            "fileHash": file_hash,
+            "originUrl": None
+        }
+        
+        response = requests.post(
+            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/assets',
+            headers=WEBFLOW_HEADERS,
+            json=metadata_payload,
+            timeout=30
+        )
+        
+        if response.status_code not in [201, 202]:  # Accept both 201 and 202
+            print(f"❌ Failed to create asset metadata: {response.status_code} - {response.text}")
+            return None
+        
+        asset_data = response.json()
+        
+        # Extract the hosted URL directly from response
+        hosted_url = asset_data.get('hostedUrl') or asset_data.get('assetUrl')
+        if hosted_url:
+            print(f"  ✅ Asset created successfully: {hosted_url}")
+            return hosted_url
+        
+        # Fallback to upload process if no direct URL
+        upload_url = asset_data.get('uploadUrl')
+        upload_details = asset_data.get('uploadDetails', {})
+        
+        if not upload_url:
+            print("❌ No upload URL returned from Webflow")
+            return None
+        
+        # Step 3: Upload file to S3 using the provided URL and details
+        upload_headers = {}
+        files = {'file': (filename, image_buffer, 'image/png')}
+        
+        # Add any required fields from upload_details
+        upload_data = upload_details.copy() if upload_details else {}
+        
+        s3_response = requests.post(
+            upload_url,
+            headers=upload_headers,
+            files=files,
+            data=upload_data,
+            timeout=60
+        )
+        
+        if s3_response.status_code in [200, 201, 204]:
+            print(f"  ✅ Successfully uploaded to S3")
+            # Return the asset URL from the original response
+            return asset_data.get('url') or asset_data.get('publicUrl') or f"https://uploads-ssl.webflow.com/{file_hash}/{filename}"
+        else:
+            print(f"❌ Failed to upload to S3: {s3_response.status_code}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error uploading image to Webflow: {e}")
+        return None
+
+def markdown_to_webflow_rich_text(markdown_content):
+    """Convert markdown to Webflow-compatible HTML"""
+    # Basic markdown to HTML conversion
+    html = markdown_content
+    
+    # Headers
+    html = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
+    
+    # Bold and italic
+    html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html)
+    html = re.sub(r'\*(.*?)\*', r'<em>\1</em>', html)
+    
+    # Links
+    html = re.sub(r'\[([^\]]+)\]\(([^\)]+)\)', r'<a href="\2">\1</a>', html)
+    
+    # Prop alert boxes (blockquotes)
+    html = re.sub(r'^> 📢 (.*?)$', r'<div style="background:#f2f2f2; padding:12px; border-left:4px solid #4CAF50; margin:15px 0;"><strong>📢 \1</strong></div>', html, flags=re.MULTILINE)
+    html = re.sub(r'^> ⚡ (.*?)$', r'<div style="background:#f2f2f2; padding:12px; border-left:4px solid #FF9800; margin:15px 0;"><strong>⚡ \1</strong></div>', html, flags=re.MULTILINE)
+    
+    # Bullet points
+    html = re.sub(r'^- (.*?)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+    html = re.sub(r'(<li>.*?</li>)', r'<ul>\1</ul>', html, flags=re.DOTALL)
+    html = re.sub(r'</ul>\s*<ul>', '', html)  # Merge consecutive lists
+    
+    # Paragraphs
+    html = re.sub(r'\n\n', '</p><p>', html)
+    html = f'<p>{html}</p>'
+    
+    # Clean up empty paragraphs
+    html = re.sub(r'<p>\s*</p>', '', html)
+    
+    return html
+
+def create_webflow_post(game_data, blog_content, cover_image_url):
+    """Create a new post in Webflow CMS"""
+    try:
+        # Extract title from blog content
+        lines = blog_content.strip().split('\n')
+        title = lines[0].replace('#', '').strip() if lines else f"{game_data['matchup']} Preview"
+        
+        # Create post summary (first paragraph, max 160 chars)
+        summary = ""
+        for line in lines[2:]:  # Skip title and date
+            if line.strip() and not line.startswith('#') and not line.startswith('*'):
+                summary = line.strip()[:157] + "..." if len(line.strip()) > 160 else line.strip()
+                break
+        
+        # Create SEO meta description with keywords
+        away_team = game_data.get('away_team', '')
+        home_team = game_data.get('home_team', '')
+        meta_desc = f"Expert {away_team} vs {home_team} betting preview with pitcher analysis, lineup matchups, and prop recommendations. {datetime.now().strftime('%B %d')} MLB betting insights."
+        if len(meta_desc) > 250:
+            meta_desc = meta_desc[:247] + "..."
+        
+        # Convert markdown to Webflow rich text
+        rich_text_content = markdown_to_webflow_rich_text(blog_content)
+        
+        # Prepare Webflow CMS item data
+        webflow_data = {
+            "isArchived": False,
+            "isDraft": False,
+            "fieldData": {
+                "name": title,
+                "post-body": rich_text_content,
+                "post-summary": summary,
+                "main-image": cover_image_url,
+                "url": "https://www.thebettinginsider.com/betting/about",
+                "meta-title": title,
+                "meta-description": meta_desc
+            }
+        }
+        
+        # Create the post
+        response = requests.post(
+            f'https://api.webflow.com/v2/collections/{WEBFLOW_COLLECTION_ID}/items',
+            headers=WEBFLOW_HEADERS,
+            json=webflow_data,
+            timeout=30
+        )
+        
+        if response.status_code == 202:  # Webflow returns 202 for successful creation
+            post_data = response.json()
+            print(f"  ✅ Created Webflow post: {title}")
+            return post_data
+        else:
+            print(f"  ❌ Failed to create Webflow post: {response.status_code}")
+            print(f"     Response: {response.text}")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error creating Webflow post: {e}")
+        return None
+
+def publish_webflow_site():
+    """Publish the Webflow site to make posts live"""
+    try:
+        response = requests.post(
+            f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
+            headers=WEBFLOW_HEADERS,
+            json={"domains": ["thebettinginsider.com"]},
+            timeout=30
+        )
+        
+        if response.status_code == 202:
+            print("  ✅ Site published successfully")
+            return True
+        else:
+            print(f"  ❌ Failed to publish site: {response.status_code}")
+            print(f"     Response: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error publishing Webflow site: {e}")
+        return False
+
 # ==================== INTERLINKING LOGIC ====================
 INTERLINK_MAP = {
-    # FIXED: Updated URLs to point to /betting/about as requested
-    "betting splits": "https://www.thebettinginsider.com/betting/about",
-    "public money": "https://www.thebettinginsider.com/betting/about", 
-    "betting percentage": "https://www.thebettinginsider.com/betting/about",
-    "sharp money": "https://www.thebettinginsider.com/betting/about",
-    "betting trends": "https://www.thebettinginsider.com/betting/about",
-    "stats dashboard": "https://www.thebettinginsider.com/betting/about",
-    
-    # Pitcher arsenal tool - keeping these as they were
+    # Stats product
+    "betting splits": "https://www.thebettinginsider.com/stats-about",
+    "public money": "https://www.thebettinginsider.com/stats-about",
+    "betting percentage": "https://www.thebettinginsider.com/stats-about",
+    "sharp money": "https://www.thebettinginsider.com/stats-about",
+    "betting trends": "https://www.thebettinginsider.com/stats-about",
+    "stats dashboard": "https://www.thebettinginsider.com/stats-about",
+    # Pitcher arsenal tool
     "pitcher arsenal data": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "pitch mix": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "arsenal-specific performance": "https://www.thebettinginsider.com/daily-mlb-game-stats",
@@ -710,14 +620,7 @@ INTERLINK_MAP = {
     "K-rate": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "strikeout rate": "https://www.thebettinginsider.com/daily-mlb-game-stats",
     "whiff rate": "https://www.thebettinginsider.com/daily-mlb-game-stats",
-    "swing and miss %": "https://www.thebettinginsider.com/daily-mlb-game-stats",
-    
-    # Additional betting-related phrases that should go to /betting/about
-    "betting analysis": "https://www.thebettinginsider.com/betting/about",
-    "betting preview": "https://www.thebettinginsider.com/betting/about",
-    "betting insights": "https://www.thebettinginsider.com/betting/about",
-    "betting edge": "https://www.thebettinginsider.com/betting/about",
-    "betting recommendation": "https://www.thebettinginsider.com/betting/about"
+    "swing and miss %": "https://www.thebettinginsider.com/daily-mlb-game-stats"
 }
 
 def auto_link_blog_content(blog_text, max_links=5):
@@ -1031,7 +934,7 @@ def generate_and_publish_daily_blogs():
                 
                 if cover_image_buffer:
                     print("  ☁️ Uploading team cover image to Webflow...")
-                    cover_filename = f"{home_team.lower().replace(' ', '-')}-cover-{datetime.now().strftime('%Y%m%d-%H%M')}.png"
+                    cover_filename = f"{home_team.lower()}-cover-{datetime.now().strftime('%Y%m%d')}.png"
                     
                     start_time = time.time()
                     cover_image_url = upload_image_to_webflow(cover_image_buffer, cover_filename)
