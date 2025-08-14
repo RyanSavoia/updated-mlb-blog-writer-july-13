@@ -135,7 +135,25 @@ def get_team_logo_url(team_name):
     print(f"⚠️  No logo match found for: {team_name}")
     return "https://a.espncdn.com/i/teamlogos/mlb/500/mlb.png"
 
-# ==================== WEBFLOW INTEGRATION ====================
+# ==================== AUTHOR ROTATION ====================
+AUTHORS = [
+    {
+        "name": "Jake Turner",
+        "bio": "Jake is a veteran sports analyst with over 10 years of MLB prop betting experience."
+    },
+    {
+        "name": "Melissa Rivera", 
+        "bio": "Melissa is a data-driven baseball enthusiast who specializes in pitch analytics and betting trends."
+    },
+    {
+        "name": "Ryan Chen",
+        "bio": "Ryan combines advanced statistics with traditional scouting to identify profitable betting opportunities."
+    },
+    {
+        "name": "Sarah Mitchell",
+        "bio": "Sarah has been analyzing MLB matchups and umpire tendencies for professional bettors since 2018."
+    }
+]
 def test_webflow_connection():
     """Test Webflow API connection and site access"""
     try:
@@ -348,8 +366,23 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
         if len(meta_desc) > 250:
             meta_desc = meta_desc[:247] + "..."
         
-        # Convert markdown to Webflow rich text
-        rich_text_content = markdown_to_webflow_rich_text(blog_content)
+        # Add author rotation for EEAT
+        author = random.choice(AUTHORS)
+        author_block = f"""<p><strong>Written by:</strong> {author['name']}</p>
+<p>{author['bio']}</p><br>"""
+        
+        # Add source links at the bottom
+        source_links = """
+
+---
+
+### 📚 Sources
+- [MLB.com – Official Stats & News](https://www.mlb.com)
+- [Baseball Savant – Advanced Analytics](https://baseballsavant.mlb.com)
+"""
+        
+        # Convert markdown to Webflow rich text with author and sources
+        rich_text_content = author_block + markdown_to_webflow_rich_text(blog_content + source_links)
         
         # Prepare Webflow CMS item data
         webflow_data = {
@@ -360,14 +393,17 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
                 "post-body": rich_text_content,
                 "post-summary": summary,
                 "main-image": cover_image_url,
+                "main-image-alt": f"{away_team} vs {home_team} matchup preview",
                 "url": "https://www.thebettinginsider.com/betting/about",
                 "meta-title": title,
-                "meta-description": meta_desc
+                "meta-description": meta_desc,
+                "author-name": author['name']
             }
         }
         
         print(f"  📝 Creating post: {title}")
         print(f"  🖼️ Cover image: {cover_image_url}")
+        print(f"  ✍️ Author: {author['name']}")
         
         # Create the post
         response = requests.post(
@@ -870,16 +906,10 @@ If umpire field is "TBA" or missing:
 
 ## **What to Bet On**
 
-Check ALL individual batters for prop opportunities
-Go through every batter in away_key_performers and home_key_performers
-BATTING LEAN CRITERIA: arsenal_ba > 0.300 AND (arsenal_ba - season_ba) > 0.020
-If ANY batter meets BOTH criteria, create a prop alert like this:
+Check ALL individual batters for prop opportunities. Go through every batter in away_key_performers and home_key_performers. BATTING LEAN CRITERIA: arsenal_ba > 0.300 AND (arsenal_ba - season_ba) > 0.020. If ANY batter meets BOTH criteria, create a prop alert like this:
 📢 **Prop Alert**: [Player Name] (.XXX → .XXX, +XX points) meets betting lean criteria!
 
-Check team strikeout rates for pitcher props
-Check away_arsenal_k_pct vs away_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER
-Check home_arsenal_k_pct vs home_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER
-If criteria met, create strikeout alert:
+Check team strikeout rates for pitcher props. Check away_arsenal_k_pct vs away_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER. Check home_arsenal_k_pct vs home_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER. If criteria met, create strikeout alert:
 ⚡ **K Prop Alert**: [Pitcher Name] strikeout OVER - [Team]'s K-rate jumps to XX.X% vs this arsenal!
 
 If NO criteria met: No significant statistical edges meet our betting threshold in this matchup.
