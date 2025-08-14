@@ -868,9 +868,7 @@ Classify correctly: If K% up and BB% up = "mixed tendencies", if K% up and BB% d
 If umpire field is "TBA" or missing:
 "Umpire assignment has not been announced, which makes prop volatility a concern."
 
-## {headers['lean']}
-
-**What to Bet On**
+## **What to Bet On**
 
 STEP 1: Check ALL individual batters for prop opportunities
 Go through every batter in away_key_performers and home_key_performers
@@ -994,38 +992,10 @@ def generate_and_publish_daily_blogs():
             blog_post_with_links = auto_link_blog_content(blog_post)
             print("  ✅ Internal links added")
             
-            # Create simple team cover image (revert to working approach from document 3)
-            print("  🖼️ Creating team cover image...")
-            away_team = game_data['away_team']
-            home_team = game_data['home_team']
-            home_logo_url = get_team_logo_url(home_team)
-            
-            cover_image_url = None
-            
-            try:
-                # Create simple team cover image (this was working in document 3)
-                cover_image_buffer = create_simple_team_cover_image(home_team, home_logo_url)
-                
-                if cover_image_buffer:
-                    print("  ☁️ Uploading team cover image to Webflow...")
-                    cover_filename = f"{home_team.lower().replace(' ', '-')}-cover-{datetime.now().strftime('%Y%m%d-%H%M')}.png"
-                    
-                    start_time = time.time()
-                    cover_image_url = upload_image_to_webflow(cover_image_buffer, cover_filename)
-                    upload_time = time.time() - start_time
-                    
-                    if cover_image_url:
-                        print(f"  ✅ Cover image uploaded in {upload_time:.1f}s")
-                    else:
-                        print(f"  ⚠️ Cover upload failed - using direct logo URL")
-                        cover_image_url = home_logo_url
-                else:
-                    print("  ⚠️ Cover image creation failed - using direct logo URL")
-                    cover_image_url = home_logo_url
-                    
-            except Exception as e:
-                print(f"  ⚠️ Image processing error: {e} - using direct logo URL")
-                cover_image_url = home_logo_url
+            # Use the custom image for all posts since cover images aren't showing up
+            print("  🖼️ Using custom cover image...")
+            cover_image_url = "https://cdn.prod.website-files.com/670bfa1fd9c3c20a149fa6a7/686db7197585374b9a2b81a7_test.png"
+            print(f"  ✅ Using custom image: {cover_image_url}")
             
             # Add internal links
             print("  🔗 Adding internal links...")
