@@ -1030,6 +1030,11 @@ def generate_and_publish_daily_blogs():
                 print(f"  ⚠️ Image processing error: {e} - using direct logo URL")
                 cover_image_url = home_logo_url
             
+            # Add internal links
+            print("  🔗 Adding internal links...")
+            blog_post_with_links = auto_link_blog_content(blog_post)
+            print("  ✅ Internal links added")
+            
             # Generate pitch mix charts and upload them to Webflow
             print("  📊 Generating and uploading pitch mix charts...")
             away_pitcher = game_data.get('away_pitcher', {})
