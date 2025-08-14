@@ -53,7 +53,7 @@ TEAM_LOGOS = {
     'ATL': 'atl', 'Braves': 'atl',
     'NYM': 'nym', 'Mets': 'nym',
     'PHI': 'phi', 'Phillies': 'phi',
-    'WSN': 'wsh', 'Nationals': 'wsh',
+    'WSN': 'wsh', 'WSH': 'wsh', 'Nationals': 'wsh',
     'MIA': 'mia', 'Marlins': 'mia',
     'CHC': 'chc', 'Cubs': 'chc',
     'MIL': 'mil', 'Brewers': 'mil',
@@ -394,38 +394,39 @@ def publish_webflow_site():
     try:
         print("  🌐 Publishing Webflow site...")
         
-        # Your specific domain IDs
-        domain_ids = [
-            "67e2e299d35c6ac356b6d8d4",  # thebettinginsider.com
-            "67e2e299d35c6ac356b6d8ca"   # www.thebettinginsider.com
-        ]
+        # IMPORTANT: Webflow has a 1 publish per minute rate limit
+        time.sleep(3)  # Extra buffer for rate limiting
         
-        # Publish payload with your domain IDs
+        # Correct API format per Webflow v2 documentation
         publish_payload = {
-            "domains": domain_ids
+            "customDomains": [
+                "67e2e299d35c6ac356b6d8d4",  # thebettinginsider.com
+                "67e2e299d35c6ac356b6d8ca"   # www.thebettinginsider.com
+            ],
+            "publishToWebflowSubdomain": True
         }
         
         response = requests.post(
             f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
             headers=WEBFLOW_HEADERS,
             json=publish_payload,
-            timeout=60
+            timeout=90  # Longer timeout for publish
         )
         
-        if response.status_code == 202:  # Webflow returns 202 for successful publish
-            print("  ✅ Site published successfully to both domains!")
+        if response.status_code in [200, 202]:
+            print("  ✅ Site published successfully!")
             print("    • thebettinginsider.com")
             print("    • www.thebettinginsider.com")
-            return True
-        elif response.status_code == 200:
-            print("  ✅ Site published successfully!")
+            print("    • Webflow subdomain")
             return True
         else:
             print(f"  ❌ Publish failed: {response.status_code}")
             print(f"     Response: {response.text}")
             
-            # Try publishing to webflow subdomain as fallback
-            print("  🔄 Trying Webflow subdomain fallback...")
+            # If custom domains fail, try just the subdomain
+            print("  🔄 Trying subdomain-only publish...")
+            time.sleep(3)  # Rate limit protection
+            
             fallback_payload = {
                 "publishToWebflowSubdomain": True
             }
@@ -434,14 +435,16 @@ def publish_webflow_site():
                 f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}/publish',
                 headers=WEBFLOW_HEADERS,
                 json=fallback_payload,
-                timeout=60
+                timeout=90
             )
             
             if fallback_response.status_code in [200, 202]:
                 print("  ✅ Published to Webflow subdomain successfully!")
+                print("    Note: Custom domains may need manual publishing")
                 return True
             else:
-                print(f"  ❌ Fallback also failed: {fallback_response.status_code}")
+                print(f"  ❌ Subdomain publish also failed: {fallback_response.status_code}")
+                print(f"     Response: {fallback_response.text}")
                 return False
                 
     except Exception as e:
