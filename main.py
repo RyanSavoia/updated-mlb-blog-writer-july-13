@@ -154,10 +154,12 @@ AUTHORS = [
         "bio": "Sarah has been analyzing MLB matchups and umpire tendencies for professional bettors since 2018."
     }
 ]
+
+# ==================== WEBFLOW INTEGRATION ====================
 def test_webflow_connection():
     """Test Webflow API connection and site access"""
     try:
-        # Step 1: Calculate MD5 hash
+        # Test site access
         print(f"  Testing Site ID: {WEBFLOW_SITE_ID}")
         response = requests.get(
             f'https://api.webflow.com/v2/sites/{WEBFLOW_SITE_ID}',
@@ -193,45 +195,6 @@ def test_webflow_connection():
     except Exception as e:
         print(f"❌ Error testing Webflow connection: {e}")
         return False
-
-def create_simple_team_cover_image(team_name, logo_url):
-    """Create a 1200x800 cover image with team logo sized to fit properly"""
-    try:
-        # Download team logo
-        response = requests.get(logo_url, timeout=10)
-        response.raise_for_status()
-        logo_img = Image.open(BytesIO(response.content)).convert('RGBA')
-        
-        # Create canvas (1200x800)
-        canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
-        draw = ImageDraw.Draw(canvas)
-        
-        # Resize logo to fit the 1200x800 canvas properly
-        # Make logo 800x800 to fill most of the 800px height
-        logo_size = (800, 800)
-        logo_img = logo_img.resize(logo_size, Image.Resampling.LANCZOS)
-        
-        # Center the logo on the canvas
-        logo_x = (1200 - 800) // 2  # Center horizontally
-        logo_y = 0  # Align to top of canvas
-        
-        # Paste logo with transparency support
-        if logo_img.mode == 'RGBA':
-            canvas.paste(logo_img, (logo_x, logo_y), logo_img)
-        else:
-            canvas.paste(logo_img, (logo_x, logo_y))
-        
-        # Save to BytesIO for upload
-        img_buffer = BytesIO()
-        canvas.save(img_buffer, format='PNG', quality=95)
-        img_buffer.seek(0)
-        
-        print(f"  ✅ Created 800x800 logo on 1200x800 canvas for {team_name}")
-        return img_buffer
-        
-    except Exception as e:
-        print(f"❌ Error creating team cover image: {e}")
-        return None
 
 def upload_image_to_webflow(image_buffer, filename):
     """Upload image to Webflow assets using the two-step process"""
@@ -384,7 +347,7 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
         # Convert markdown to Webflow rich text with author and sources
         rich_text_content = author_block + markdown_to_webflow_rich_text(blog_content + source_links)
         
-        # Prepare Webflow CMS item data
+        # Prepare Webflow CMS item data - REMOVED THE PROBLEMATIC FIELDS
         webflow_data = {
             "isArchived": False,
             "isDraft": False,
@@ -393,11 +356,9 @@ def create_webflow_post(game_data, blog_content, cover_image_url):
                 "post-body": rich_text_content,
                 "post-summary": summary,
                 "main-image": cover_image_url,
-                "main-image-alt": f"{away_team} vs {home_team} matchup preview",
                 "url": "https://www.thebettinginsider.com/betting/about",
                 "meta-title": title,
-                "meta-description": meta_desc,
-                "author-name": author['name']
+                "meta-description": meta_desc
             }
         }
         
@@ -487,95 +448,6 @@ def publish_webflow_site():
     except Exception as e:
         print(f"❌ Error publishing site: {e}")
         return False
-
-def create_composite_image(away_team, home_team, away_logo_url, home_logo_url):
-    """Create a composite cover image with both team logos"""
-    try:
-        # Download team logos
-        away_response = requests.get(away_logo_url, timeout=10)
-        home_response = requests.get(home_logo_url, timeout=10)
-        
-        away_img = Image.open(BytesIO(away_response.content)).convert('RGBA')
-        home_img = Image.open(BytesIO(home_response.content)).convert('RGBA')
-        
-        # Create canvas (1200x800 to match your spec)
-        canvas = Image.new('RGB', (1200, 800), color='#1a1a1a')
-        draw = ImageDraw.Draw(canvas)
-        
-        # Resize logos to fit nicely
-        logo_size = (250, 250)  # Bigger logos for better visibility
-        away_img = away_img.resize(logo_size, Image.Resampling.LANCZOS)
-        home_img = home_img.resize(logo_size, Image.Resampling.LANCZOS)
-        
-        # Position logos with "VS" between them
-        away_x = 200
-        home_x = 750
-        logo_y = 275  # Center vertically on 800px canvas
-        
-        # Paste logos (handle transparency)
-        canvas.paste(away_img, (away_x, logo_y), away_img if away_img.mode == 'RGBA' else None)
-        canvas.paste(home_img, (home_x, logo_y), home_img if home_img.mode == 'RGBA' else None)
-        
-        # Add "VS" text
-        try:
-            # Try to load a font (fallback to default if not available)
-            font = ImageFont.truetype("arial.ttf", 48)
-        except:
-            font = ImageFont.load_default()
-        
-        vs_text = "VS"
-        bbox = draw.textbbox((0, 0), vs_text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_x = (1200 - text_width) // 2
-        text_y = 375  # Center between logos
-        
-        draw.text((text_x, text_y), vs_text, fill='white', font=font)
-        
-        # Add team names
-        try:
-            team_font = ImageFont.truetype("arial.ttf", 24)
-        except:
-            team_font = ImageFont.load_default()
-        
-        # Away team name
-        away_bbox = draw.textbbox((0, 0), away_team, font=team_font)
-        away_text_width = away_bbox[2] - away_bbox[0]
-        away_text_x = away_x + (250 - away_text_width) // 2
-        draw.text((away_text_x, logo_y + 270), away_team, fill='white', font=team_font)
-        
-        # Home team name
-        home_bbox = draw.textbbox((0, 0), home_team, font=team_font)
-        home_text_width = home_bbox[2] - home_bbox[0]
-        home_text_x = home_x + (250 - home_text_width) // 2
-        draw.text((home_text_x, logo_y + 270), home_team, fill='white', font=team_font)
-        
-        # Add title at top
-        title = f"{away_team} vs {home_team} - MLB Preview"
-        try:
-            title_font = ImageFont.truetype("arial.ttf", 32)
-        except:
-            title_font = ImageFont.load_default()
-        
-        title_bbox = draw.textbbox((0, 0), title, font=title_font)
-        title_width = title_bbox[2] - title_bbox[0]
-        title_x = (1200 - title_width) // 2
-        draw.text((title_x, 100), title, fill='white', font=title_font)
-        
-        # Save to BytesIO for upload
-        img_buffer = BytesIO()
-        canvas.save(img_buffer, format='PNG', quality=95)
-        img_buffer.seek(0)
-        
-        return img_buffer
-        
-    except Exception as e:
-        print(f"❌ Error creating composite image: {e}")
-        # Fallback: just download one logo
-        try:
-            response = requests.get(away_logo_url, timeout=10)
-            return BytesIO(response.content)
-        except:
-            return None
 
 def generate_pitch_mix_chart(pitcher_name, arsenal, save_path):
     """Generate a pie chart showing pitcher's pitch mix"""
@@ -838,10 +710,6 @@ def get_mlb_blog_post_prompt(topic, keywords, game_data):
     else:
         seo_title = topic.replace('MLB Betting Preview', 'Odds, Props & Analysis')
     
-    # Get current date for roundup link
-    current_date = datetime.now().strftime('%Y-%m-%d')
-    current_date_readable = datetime.now().strftime('%b %d')
-    
     prompt = f"""You're an expert MLB betting analyst and blog writer. You write sharp, stat-driven previews for baseball bettors.
 
 Based on the JSON game data below, write a 500–800 word blog post that follows this EXACT structure:
@@ -1026,11 +894,6 @@ def generate_and_publish_daily_blogs():
             cover_image_url = "https://cdn.prod.website-files.com/670bfa1fd9c3c20a149fa6a7/686db7197585374b9a2b81a7_test.png"
             print(f"  ✅ Using custom image: {cover_image_url}")
             
-            # Add internal links
-            print("  🔗 Adding internal links...")
-            blog_post_with_links = auto_link_blog_content(blog_post)
-            print("  ✅ Internal links added")
-            
             # Generate pitch mix charts and upload them to Webflow
             print("  📊 Generating and uploading pitch mix charts...")
             away_pitcher = game_data.get('away_pitcher', {})
@@ -1076,9 +939,6 @@ def generate_and_publish_daily_blogs():
             # Add chart URLs to game_data so they can be referenced in the blog
             game_data['away_pitcher_chart_url'] = away_chart_url
             game_data['home_pitcher_chart_url'] = home_chart_url
-            
-            # Add pitch mix charts to blog content
-            # Remove the random chart links that were being added at the end
             
             # Webflow requires a cover image, so we must have one
             if not cover_image_url:
