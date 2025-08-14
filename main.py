@@ -870,19 +870,18 @@ If umpire field is "TBA" or missing:
 
 ## **What to Bet On**
 
-STEP 1: Check ALL individual batters for prop opportunities
+Check ALL individual batters for prop opportunities
 Go through every batter in away_key_performers and home_key_performers
 BATTING LEAN CRITERIA: arsenal_ba > 0.300 AND (arsenal_ba - season_ba) > 0.020
 If ANY batter meets BOTH criteria, create a prop alert like this:
 📢 **Prop Alert**: [Player Name] (.XXX → .XXX, +XX points) meets betting lean criteria!
 
-STEP 2: Check team strikeout rates for pitcher props
+Check team strikeout rates for pitcher props
 Check away_arsenal_k_pct vs away_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER
 Check home_arsenal_k_pct vs home_season_k_pct: If arsenal K% > 25% AND increase > 4%, lean OVER
 If criteria met, create strikeout alert:
 ⚡ **K Prop Alert**: [Pitcher Name] strikeout OVER - [Team]'s K-rate jumps to XX.X% vs this arsenal!
 
-STEP 3: Report findings
 If NO criteria met: No significant statistical edges meet our betting threshold in this matchup.
 
 ## 🔑 Key Takeaways
